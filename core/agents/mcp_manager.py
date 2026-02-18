@@ -1,9 +1,11 @@
-#/core/agents/mcp_orchestrator.py
-import boto3
+#/core/agents/mcp_manager.py
+# Static tool registry (fallback when MCP Lambda is unavailable)
+
 import json
 import uuid
+import os
+import urllib.request
 
-# Static tool registry (fallback when MCP Lambda is unavailable)
 DEFAULT_TOOLS = {
     'flight_api': {
         'name': 'Flight API',
@@ -48,12 +50,12 @@ DEFAULT_TOOLS = {
 
 # MCP MANAGER (Transport + Local Registry)
 class McpManager:
-    def __init__(self, mcp_lambda_name: str, region: str = "ap-south-1"):
-        self.mcp_lambda_name = mcp_lambda_name
-        self.lambda_client = boto3.client("lambda", region_name=region)
+    def __init__(self, mcp_api_url: str, api_key: str):
+        self.mcp_api_url = mcp_api_url
+        self.api_key = api_key
 
         # Start with static tool registry
-        self.tools = dict(DEFAULT_TOOLS)
+        self.tools = {}
         self.prompts = {}
         self.resources = {}
 
@@ -61,16 +63,10 @@ class McpManager:
         try:
             self.initialize()
             self._load_registry()
-            # Only use Lambda results if they returned tools
-            if not self.tools:
-                print("[MCP] Lambda returned no tools, keeping static registry")
-                self.tools = dict(DEFAULT_TOOLS)
         except Exception as e:
             print(f"[MCP] Warning: Could not initialize MCP manager: {e}")
-            print(f"[MCP] Using static tool registry as fallback")
-            self.tools = dict(DEFAULT_TOOLS)
 
-    # Internal Lambda Invoke
+    # Internal HTTP Invoke (API Gateway)
     def _invoke(self, method: str, params: dict | None = None):
         request_id = str(uuid.uuid4())
 
@@ -81,13 +77,18 @@ class McpManager:
             "id": request_id
         }
 
-        response = self.lambda_client.invoke(
-            FunctionName=self.mcp_lambda_name,
-            InvocationType="RequestResponse",
-            Payload=json.dumps(payload),
+        req = urllib.request.Request(
+            self.mcp_api_url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "x-api-key": self.api_key
+            },
+            method="POST"
         )
 
-        raw_result = json.loads(response["Payload"].read())
+        with urllib.request.urlopen(req, timeout=30) as response:
+            raw_result = json.loads(response.read().decode("utf-8"))
 
         # JSON-RPC error handling
         if "error" in raw_result:
@@ -161,4 +162,4 @@ class McpManager:
         return self.prompts[prompt_name]
 
 # Initialize MCP manager: GLOBAL (Persist Across Warm Lambda Invocations)
-mcp_manager = McpManager(mcp_lambda_name="changi-dr-mcp", region="ap-south-1")
+mcp_manager = McpManager(mcp_api_url=os.environ["MCP_API_URL"],  api_key=os.environ["MCP_API_KEY"])

@@ -26,6 +26,16 @@ Parameters:
     Description: Session TTL in seconds
     Default: 3600
 
+  McpApiUrl:
+    Type: String
+    Description: MCP API Gateway URL
+
+  McpApiKey:
+    Type: String
+    Description: MCP API Gateway API Key
+    NoEcho: true
+
+
 Globals:
   Function:
     Environment:
@@ -40,11 +50,16 @@ Globals:
         WORKFLOWS_STORAGE_PATH: "workflows.json"
         DYNAMODB_TABLE: !Ref SessionsTable
         MCP_SERVER_URL: "http://host.docker.internal:8001" # Default for local, override in Prod if needed
+
+        MCP_API_URL: !Ref McpApiUrl
+        MCP_API_KEY: !Ref McpApiKey
+
   Api:
     Cors:
       AllowOrigin: "'*'"
       AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+
 
 Resources:
 
@@ -126,6 +141,7 @@ Resources:
         - AttributeName: session_id
           KeyType: HASH
       BillingMode: PAY_PER_REQUEST
+
 
 Outputs:
   ApiUrl:
