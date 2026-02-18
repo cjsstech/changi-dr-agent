@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% if agent %}{{ agent.name }}{% else %}Travel Assistant{% endif %}</title>
+    <link rel="icon" href="https://cjss-dr-artifacts.s3.ap-south-1.amazonaws.com/web_sc/chat/static/logo-light.png">F
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-container">
+        <!-- Left Panel - Chat -->
+        <div class="chat-panel">
+            <div class="chat-header">
+                <div class="logo-section">
+                    <img src="https://cjss-dr-artifacts.s3.ap-south-1.amazonaws.com/web_sc/chat/static/logo-light.png"
+                        alt="Changi Airport Group" class="changi-logo">
+                    <span class="header-badge">{% if agent %}{{ agent.name }}{% else %}Travel Assistant{% endif
+                        %}</span>
+                </div>
+                <button class="new-chat-btn" id="newChatBtn">
+                    Restart the chat
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <!-- Messages appear here -->
+            </div>
+
+            <!-- Quick Prompts removed -->
+
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea id="userInput" placeholder="Tell me about your dream trip..." rows="1"></textarea>
+                    <button id="sendBtn" class="send-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                        </svg>
+                    </button>
+                </div>
+                <p class="input-hint">Press Enter to send, Shift+Enter for new line</p>
+            </div>
+        </div>
+
+        <!-- Right Panel - Travel Plans & Inspiration -->
+        <div class="results-panel" id="resultsPanel">
+            <div class="results-header">
+                <div class="results-header-content">
+                    <h2>Your Travel Journey</h2>
+                    <span class="results-subtitle">Curated experiences await</span>
+                </div>
+                <button class="close-panel-btn" id="closePanelBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <div class="results-content" id="resultsContent">
+                <!-- Default State -->
+                <div class="empty-state" id="emptyState">
+                    <div class="empty-illustration">
+                        <svg viewBox="0 0 200 200" fill="none">
+                            <circle cx="100" cy="100" r="80" fill="url(#gradient1)" opacity="0.1" />
+                            <path d="M60 120 L100 60 L140 120 Z" fill="url(#gradient1)" opacity="0.3" />
+                            <circle cx="100" cy="100" r="30" fill="url(#gradient1)" opacity="0.5" />
+                            <path d="M85 95 L95 105 L115 85" stroke="white" stroke-width="4" stroke-linecap="round" />
+                            <defs>
+                                <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" style="stop-color:#667eea" />
+                                    <stop offset="100%" style="stop-color:#764ba2" />
+                                </linearGradient>
+                            </defs>
+                        </svg>
+                    </div>
+                    <h3>Ready to explore?</h3>
+                    <p>Share your travel preferences and I'll create a personalized journey just for you.</p>
+
+                </div>
+
+                <!-- Trip Results (shown after conversation) -->
+                <div class="trip-results" id="tripResults" style="display: none;">
+                    <!-- Destination Card -->
+                    <div class="destination-card" id="destinationCard">
+                        <div class="destination-image">
+                            <img src="" alt="Destination" id="destinationImage">
+                            <div class="destination-overlay">
+                                <span class="destination-badge">✈️ Your Trip</span>
+                            </div>
+                        </div>
+                        <div class="destination-info">
+                            <h3 id="destinationName">-</h3>
+                            <p id="destinationDuration">-</p>
+                        </div>
+                    </div>
+
+                    <!-- Itinerary Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">📅</span>
+                            <h4>Your Itinerary</h4>
+                        </div>
+                        <div class="itinerary-content" id="itineraryContent">
+                            <!-- Itinerary items will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Experiences Section -->
+                    <div class="section-card">
+                        <div class="section-header">
+                            <span class="section-icon">✨</span>
+                            <h4>Recommended Experiences</h4>
+                        </div>
+                        <div class="experiences-grid" id="experiencesGrid">
+                            <!-- Experience cards will be inserted here -->
+                        </div>
+                    </div>
+
+                    <!-- Google Maps Itinerary Section -->
+                    <div class="map-section">
+                        <div class="section-header">
+                            <span class="section-icon">🗺️</span>
+                            <h4>Your Trip Map</h4>
+                        </div>
+                        <div class="map-days-container" id="mapDaysContainer">
+                            <!-- Day-by-day map links will be generated dynamically -->
+                        </div>
+                        <div class="map-actions">
+                            <a href="#" id="fullTripMapLink" class="google-maps-btn" target="_blank">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
+                                    <path
+                                        d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" />
+                                </svg>
+                                Open Full Trip in Google Maps
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <script>
+        const MCP_SERVER_URL = "{{ mcp_server_url|default('http://localhost:8001') }}";
+        const agentId = "{{ agent.id if agent else '' }}";
+        const API_BASE = "{{ url_for('index').rstrip('/') }}";
+        const isWorkflow = {{ 'true' if is_workflow|default (false) else 'false' }};
+    </script>
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+
+</html>

@@ -1,0 +1,34 @@
+{
+  "dr_users": [
+    {
+      "PutRequest": {
+        "Item": {
+          "user_id":   { "S": "admin_01" },
+          "name":      { "S": "ZiHao" },
+          "role":      { "S": "ADMIN" },
+          "password":  { "S": "admin_xx_12345" }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "user_id":   { "S": "user_01" },
+          "name":      { "S": "Wei Ming" },
+          "role":      { "S": "USER" },
+          "password":  { "S": "user_xx_12345" }
+        }
+      }
+    },
+    {
+      "PutRequest": {
+        "Item": {
+          "user_id":   { "S": "user_03" },
+          "name":      { "S": "Jie En" },
+          "role":      { "S": "USER" },
+          "password":  { "S": "user_xx_12345" }
+        }
+      }
+    }
+  ]
+}

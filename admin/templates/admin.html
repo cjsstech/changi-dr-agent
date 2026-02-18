@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Agent & Workflow Manager</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+
+
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1>🛠️ Admin Dashboard</h1>
+            <div class="admin-actions">
+                <a href="{{ url_for('index') }}" class="btn-secondary">Back to Chat</a>
+                <a href="{{ url_for('logout') }}" class="btn-secondary">Logout</a>
+            </div>
+        </div>
+
+        <!-- Overview Cards -->
+        <div class="overview-cards">
+            <div class="overview-card">
+                <div class="overview-icon">🤖</div>
+                <div class="overview-info">
+                    <span class="overview-count" id="agentsCount">0</span>
+                    <span class="overview-label">Agents</span>
+                </div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-icon">📝</div>
+                <div class="overview-info">
+                    <span class="overview-count" id="promptsCount">0</span>
+                    <span class="overview-label">Prompts</span>
+                </div>
+            </div>
+            <div class="overview-card">
+                <div class="overview-icon">🔧</div>
+                <div class="overview-info">
+                    <span class="overview-count" id="toolsCount">0</span>
+                    <span class="overview-label">MCP Tools</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" data-tab="agents">🤖 Agents</button>
+            <button class="tab-btn" data-tab="workflows">🔀 Workflows</button>
+            <button class="tab-btn" data-tab="prompts">📝 Prompts</button>
+            <button class="tab-btn" data-tab="mcp">🔧 MCP Tools</button>
+        </div>
+
+        <!-- Agents Tab -->
+        <div class="tab-content active" id="agents-tab">
+            <div class="admin-content">
+                <!-- Agent List -->
+                <div class="agents-section">
+                    <h2>Existing Agents</h2>
+                    <div id="agentsList" class="agents-list">
+                        <!-- Agents will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Create/Edit Agent Form -->
+                <div class="agent-form-section">
+                    <h2 id="formTitle">Create New Agent</h2>
+                    <form id="agentForm" class="agent-form">
+                        <input type="hidden" id="agentId" name="id">
+
+                        <div class="form-group">
+                            <label for="agentName">Name *</label>
+                            <input type="text" id="agentName" name="name" required placeholder="e.g., Travel Assistant">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="agentDescription">Description</label>
+                            <textarea id="agentDescription" name="description" rows="2"
+                                placeholder="Brief description of the agent"></textarea>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="llmProvider">LLM Provider *</label>
+                                <select id="llmProvider" name="llm_provider" required>
+                                    <option value="openai">OpenAI</option>
+                                    <option value="gemini">Gemini</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="llmModel">LLM Model *</label>
+                                <select id="llmModel" name="llm_model" required>
+                                    <!-- Options will be populated by JavaScript based on provider -->
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="promptFile">Prompt File</label>
+                            <select id="promptFile" name="prompt_file">
+                                <option value="">-- Select a prompt file (optional) --</option>
+                                {% for prompt_file in prompt_files %}
+                                <option value="{{ prompt_file }}">{{ prompt_file }}</option>
+                                {% endfor %}
+                            </select>
+                            <small style="display: block; margin-top: 5px; color: #666;">
+                                Select a prompt file from the prompts folder, or enter a custom prompt below
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="systemPrompt">System Prompt <span id="promptRequired">*</span></label>
+                            <textarea id="systemPrompt" name="system_prompt" rows="10"
+                                placeholder="Enter the system prompt for the agent, or select a prompt file above..."></textarea>
+                            <small style="display: block; margin-top: 5px; color: #666;">
+                                Either select a prompt file above OR enter a custom prompt here
+                            </small>
+                        </div>
+
+                        <div class="form-group">
+                            <label>MCP Tools</label>
+                            <div class="mcp-tools-list">
+                                {% for tool in available_tools %}
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="mcp_tools" value="{{ tool.id }}">
+                                    <span>{{ tool.name }}</span>
+                                    <small>{{ tool.description }}</small>
+                                </label>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Save Agent</button>
+                            <button type="button" id="cancelBtn" class="btn-secondary"
+                                style="display: none;">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Workflows Tab -->
+        <div class="tab-content" id="workflows-tab">
+            <div class="workflows-container">
+                <div class="workflows-list-section">
+                    <div class="section-header">
+                        <h2>🔀 Workflows</h2>
+                        <button class="btn-primary" onclick="showCreateWorkflowForm()">+ New Workflow</button>
+                    </div>
+                    <p class="section-description">Create multi-agent workflows by connecting agents together. Workflows
+                        allow agents to collaborate and pass context between each other.</p>
+                    <div id="workflowsList" class="workflows-list">
+                        <!-- Workflows will be loaded here -->
+                    </div>
+                </div>
+
+                <!-- Create/Edit Workflow Panel -->
+                <div class="workflow-editor-section" id="workflowEditorSection" style="display: none;">
+                    <h2 id="workflowEditorTitle">Create New Workflow</h2>
+                    <form id="workflowForm" class="workflow-form">
+                        <input type="hidden" id="workflowId" name="id">
+
+                        <div class="form-group">
+                            <label for="workflowName">Workflow Name *</label>
+                            <input type="text" id="workflowName" name="name" required
+                                placeholder="e.g., Travel Planning Pipeline">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="workflowDescription">Description</label>
+                            <textarea id="workflowDescription" name="description" rows="2"
+                                placeholder="Describe what this workflow does..."></textarea>
+                        </div>
+
+                        <!-- Visual Builder Canvas -->
+                        <div class="form-group">
+                            <label>Workflow Canvas</label>
+                            <div class="workflow-canvas-container">
+                                <div class="workflow-toolbar">
+                                    <span class="toolbar-label">Add Agent:</span>
+                                    <button type="button" class="node-btn orchestrator-btn"
+                                        onclick="addWorkflowNode('orchestrator')" title="Orchestrator Agent">👑
+                                        Orchestrator</button>
+                                    <button type="button" class="node-btn agent-btn" onclick="addWorkflowNode('agent')"
+                                        title="Agent Node">🤖 Agent</button>
+                                    <span class="toolbar-separator"></span>
+                                    <button type="button" class="toolbar-btn" onclick="autoLayout()"
+                                        title="Auto-arrange nodes">📐 Layout</button>
+                                    <button type="button" class="toolbar-btn" onclick="clearWorkflowCanvas()"
+                                        title="Clear Canvas">🗑️ Clear</button>
+                                </div>
+                                <div id="workflowCanvas" class="workflow-canvas" ondragover="onCanvasDragOver(event)"
+                                    ondrop="onCanvasDrop(event)">
+                                    <svg id="workflowEdgesSvg" class="workflow-edges-svg"></svg>
+                                    <div class="canvas-placeholder" id="canvasPlaceholder">
+                                        <p>👑 Add an <strong>Orchestrator</strong> to coordinate other agents</p>
+                                        <p>🤖 Add <strong>Agents</strong> and connect them via drag</p>
+                                        <p>🔗 Drag from output (right) to input (left) ports</p>
+                                    </div>
+                                </div>
+                                <div id="validationMessages" class="validation-messages"></div>
+
+                            </div>
+                        </div>
+
+                        <!-- Node Properties Panel -->
+                        <div id="nodePropertiesPanel" class="node-properties-panel" style="display: none;">
+                            <h4>Node Properties</h4>
+                            <div id="nodePropertiesContent">
+                                <!-- Dynamic content based on selected node -->
+                            </div>
+                        </div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Save Workflow</button>
+                            <button type="button" class="btn-secondary" onclick="hideWorkflowEditor()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Prompts Tab -->
+
+        <div class="tab-content" id="prompts-tab">
+            <div class="prompts-container">
+                <div class="prompts-list-section">
+                    <h2>Available Prompts</h2>
+                    <div class="prompts-actions">
+                        <button class="btn-primary" onclick="showCreatePromptForm()">+ New Prompt</button>
+                    </div>
+                    <div id="promptsList" class="prompts-list">
+                        <!-- Prompts will be loaded here -->
+                    </div>
+                </div>
+                <div class="prompt-editor-section" id="promptEditorSection" style="display: none;">
+                    <h2 id="promptEditorTitle">Edit Prompt</h2>
+                    <form id="promptForm" class="prompt-form">
+                        <input type="hidden" id="promptFileName" name="filename">
+                        <div class="form-group" id="newPromptNameGroup" style="display: none;">
+                            <label for="newPromptName">File Name *</label>
+                            <input type="text" id="newPromptName" name="new_filename" placeholder="e.g., my_prompt.txt">
+                            <small>Must end with .txt</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="promptContent">Prompt Content *</label>
+                            <textarea id="promptContent" name="content" rows="20"
+                                placeholder="Enter your prompt content..."></textarea>
+                        </div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn-primary">Save Prompt</button>
+                            <button type="button" class="btn-secondary" onclick="hidePromptEditor()">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- MCP Tools Tab -->
+        <div class="tab-content" id="mcp-tab">
+            <div class="mcp-container">
+                <h2>Available MCP Tools</h2>
+                <p class="mcp-description">These tools can be enabled per-agent in the Agents tab. Tools marked as
+                    "Enabled" are available for use.</p>
+                <div id="mcpToolsList" class="mcp-tools-grid">
+                    <!-- MCP Tools will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Pass server-side data to JavaScript
+        const AVAILABLE_TOOLS = {{ available_tools | tojson | safe }};
+        const AVAILABLE_PROMPTS = {{ prompt_files | tojson | safe }};
+    </script>
+
+    <script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+
+</html>

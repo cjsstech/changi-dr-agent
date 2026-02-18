@@ -1,0 +1,15 @@
+{
+  "travel-bot-default": {
+    "id": "travel-bot-default",
+    "name": "Changi Travel Assistant",
+    "description": "AI travel itinerary planner for Changi Airport's Travel Inspiration Hub",
+    "llm_provider": "openai",
+    "llm_model": "gpt-4o",
+    "prompt_file": "travel_assistant.txt",
+    "mcp_tools": [],
+    "created_by": "system",
+    "created_at": "2025-12-14T00:00:00Z",
+    "updated_at": "2025-12-14T00:00:00Z"
+  }
+}
+

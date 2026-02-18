@@ -1,0 +1,33 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "PublicReadWebFolderOnly",
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cjss-dr-artifacts/web_sc/*"
+    },
+    {
+      "Sid": "AllowLambdaListBucket",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::344302311101:role/cjss-dr-ChangiDrChatLambdaRole-LUbm9PrDzO1X"
+      },
+      "Action": "s3:ListBucket",
+      "Resource": "arn:aws:s3:::cjss-dr-artifacts"
+    },
+    {
+      "Sid": "AllowLambdaGetObjects",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::344302311101:role/cjss-dr-ChangiDrChatLambdaRole-LUbm9PrDzO1X"
+      },
+      "Action": "s3:GetObject",
+      "Resource": "arn:aws:s3:::cjss-dr-artifacts/*"
+    }
+  ]
+}
+
+
+
