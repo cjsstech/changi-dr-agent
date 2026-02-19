@@ -1,0 +1,31 @@
+version = 0.1
+
+[default.deploy]
+confirm_changeset = false
+
+[default.deploy.parameters]
+stack_name = "cjss-dr"
+capabilities = "CAPABILITY_NAMED_IAM"
+
+# Manual bucket for SAM artifacts
+s3_bucket = "cjss-dr-artifacts"
+
+s3_prefix = "cjss-dr"
+disable_rollback = false
+parameter_overrides = """
+AgentFunctionName=changi-dr-chat
+OpenAIKey=YOUR_OPENAI_KEY
+GeminiKey=YOUR_GEMINI_KEY
+ChangiApiKey=YOUR_CHANGI_KEY
+FileBucketName=cjss-dr-artifacts
+SessionTTL=3600
+McpApiUrl=https://xxxx.execute-api.ap-south-1.amazonaws.com/Prod/mcp/
+McpApiKey=YOUR_API_KEY
+"""
+
+
+image_repositories = []
+
+
+[default.global.parameters]
+region = "ap-south-1"

@@ -9,6 +9,10 @@ Parameters:
     Description: OpenAI API Key
     NoEcho: true
     Default: ""
+  AgentFunctionName:
+    Type: String
+    Description: Lambda function name for Agent handler
+
   GeminiKey:
     Type: String
     Description: Gemini API Key
@@ -98,7 +102,7 @@ Resources:
   ChangiDrMCPLambda:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: changi-dr-mcp
+      FunctionName: !Ref AgentFunctionName
       Handler: handlers/mcp_handler.process
       Runtime: python3.12
       Architectures:
