@@ -22,23 +22,36 @@ def normalize_response(response):
     Convert Flask-style responses to Lambda proxy integration format.
     Handles: tuple (body, status), bare strings, and already-correct dicts.
     """
+    cors_headers = {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token",
+        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS"
+    }
+
+    res_dict = None
     if isinstance(response, tuple):
         body, status = response
         if isinstance(body, dict) and "statusCode" in body:
             # jsonify() already returns a Lambda dict; just override status
             body["statusCode"] = status
-            return body
+            res_dict = body
         elif isinstance(body, dict):
             import json
-            return {"statusCode": status, "headers": {"Content-Type": "application/json"}, "body": json.dumps(body)}
+            res_dict = {"statusCode": status, "headers": {"Content-Type": "application/json"}, "body": json.dumps(body)}
         else:
-            return {"statusCode": status, "headers": {"Content-Type": "text/html; charset=utf-8"}, "body": str(body)}
+            res_dict = {"statusCode": status, "headers": {"Content-Type": "text/html; charset=utf-8"}, "body": str(body)}
     elif isinstance(response, str):
-        return {"statusCode": 200, "headers": {"Content-Type": "text/html; charset=utf-8"}, "body": response}
+        res_dict = {"statusCode": 200, "headers": {"Content-Type": "text/html; charset=utf-8"}, "body": response}
     elif isinstance(response, dict) and "statusCode" in response:
-        return response
+        res_dict = response
     else:
-        return {"statusCode": 500, "body": "Invalid response format"}
+        res_dict = {"statusCode": 500, "body": "Invalid response format"}
+
+    if "headers" not in res_dict:
+        res_dict["headers"] = {}
+    
+    res_dict["headers"].update(cors_headers)
+    return res_dict
 
 
 def process(event, context):
@@ -47,6 +60,9 @@ def process(event, context):
         lm_request = build_lambda_request(event)
         path = lm_request.path
         method = lm_request.method
+
+        if method == "OPTIONS":
+            return normalize_response({"statusCode": 200, "body": ""})
 
         # Set stage prefix for URL generation (e.g., /Prod)
         app_tools.set_stage_prefix(lm_request.stage)

@@ -6,9 +6,9 @@ import json
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
+import os
 
 from services.file_store_service import S3Storage  # adjust if needed
-import config
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ class AgentService:
 
     def __init__(self, storage_path: Optional[str] = None):
         # Keep same logical path as before
-        self.storage_path = storage_path or getattr(config, "AGENTS_STORAGE_PATH", "storage/agents.json")
+        self.storage_path = storage_path or os.environ.get('AGENTS_STORAGE_PATH', 'agents.json')
         self.storage = S3Storage()
 
     # ---------------------------------

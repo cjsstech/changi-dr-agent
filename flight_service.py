@@ -2,7 +2,7 @@ import requests
 import logging
 import os
 from datetime import datetime, timedelta
-from urllib.parse import quote
+
 
 # Set up logger for flight service
 logger = logging.getLogger(__name__)
@@ -17,8 +17,8 @@ if not logger.handlers:
     logger.addHandler(handler)
 
 # Changi Airport GraphQL API Configuration
-CHANGI_API_URL = os.getenv("CHANGI_API_URL", "https://cauat-appsync.lz.changiairport.com/graphql")
-CHANGI_API_KEY = os.getenv("CHANGI_API_KEY", "")
+CHANGI_API_URL = os.getenv("CHANGI_API_URL", "https://vjk4bub6rbbjrflwlroku34myi.appsync-api.ap-southeast-1.amazonaws.com/graphql")
+CHANGI_API_KEY = os.getenv("CHANGI_API_KEY", "da2-rkyh2gb2kvft3oco3l6eaqmlb4")
 
 
 def fetch_flight_info(flight_number, direction="DEP"):
@@ -240,76 +240,70 @@ def search_flights_by_destination(destination, scheduled_dates, preferred_times=
     
     # Search for flights on each date
     for scheduled_date in scheduled_dates:
-        # Build search query using the working searchCA query structure
+        # Build search query using the updated searchCA_v2 query structure
         query = f'''
         query searchAll {{
-            searchCA(
-                text: "{destination}",
-                category: FLIGHTS,
-                page_size: 400,
-                filter: {{
-                    scheduled_date: "{scheduled_date}"
+            searchCA_v2(text: "{destination}", category: FLIGHTS, page_size: 100, page_number: 1, filter: {{ terminal:"" direction:DEP scheduled_date: "{scheduled_date}" }})
+            {{
+                items {{
+                    ... on Flight {{
+                        flight_number
+                        scheduled_date
+                        airline
+                        airport_details {{
+                            name
+                            name_zh
+                            name_zh_hant
+                            country_code
+                            country
+                            city_code
+                            city
+                        }}
+                        airline_details {{
+                            name
+                            logo_url
+                            name_zh
+                            name_zh_hant
+                            code
+                        }}
+                        via_airport_details {{
+                            name
+                            name_zh
+                            name_zh_hant
+                            country_code
+                            country
+                            city_code
+                            city
+                        }}
+                        status_mapping {{
+                            belt_status_en
+                            belt_status_zh
+                            details_status_en
+                            details_status_zh
+                            listing_status_en
+                            listing_status_zh
+                            show_gate
+                            status_text_color
+                        }}
+                        slave_flights
+                        airport
+                        direction
+                        display_gate
+                        current_gate
+                        display_timestamp
+                        flight_status
+                        pick_up_door
+                        scheduled_time
+                        terminal
+                        via
+                        check_in_row
+                        display_belt
+                    }}
                 }}
-            ) {{
-            items {{
-                ... on Flight {{
-                    flight_number
-                    scheduled_date
-                    airline
-                    airport_details {{
-                        name
-                        name_zh
-                        name_zh_hant
-                        country_code
-                        country
-                        city_code
-                        city
-                    }}
-                    airline_details {{
-                        name
-                        logo_url
-                        name_zh
-                        name_zh_hant
-                        code
-                    }}
-                    via_airport_details {{
-                        name
-                        name_zh
-                        name_zh_hant
-                        country_code
-                        country
-                        city_code
-                        city
-                    }}
-                    status_mapping {{
-                        belt_status_en
-                        belt_status_zh
-                        details_status_en
-                        details_status_zh
-                        listing_status_en
-                        listing_status_zh
-                        show_gate
-                        status_text_color
-                    }}
-                    slave_flights
-                    airport
-                    direction
-                    display_gate
-                    current_gate
-                    display_timestamp
-                    flight_status
-                    pick_up_door
-                    scheduled_time
-                    terminal
-                    via
-                    check_in_row
-                    display_belt
-                }}
+                total
             }}
-            total
         }}
-    }}
-    '''
+        '''
     
         try:
             logger.info(f"[Flight API] ===== SEARCHING DATE: {scheduled_date} =====")
@@ -340,12 +334,12 @@ def search_flights_by_destination(destination, scheduled_dates, preferred_times=
                 logger.error(f"[Flight API] GraphQL ERRORS FOUND for {scheduled_date}: {data['errors']}")
                 continue
             
-            # Get results from searchCA query
+            # Get results from searchCA_v2 query
             data_obj = data.get("data", {})
             logger.info(f"[Flight API] Data object keys: {list(data_obj.keys())}")
-            result = data_obj.get("searchCA")
+            result = data_obj.get("searchCA_v2")
             if not result:
-                logger.warning(f"[Flight API] ⚠️ No 'searchCA' in response.data for {scheduled_date}")
+                logger.warning(f"[Flight API] ⚠️ No 'searchCA_v2' in response.data for {scheduled_date}")
                 logger.warning(f"[Flight API] Available keys in data: {list(data_obj.keys())}")
                 continue
             

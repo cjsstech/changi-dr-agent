@@ -23,17 +23,41 @@ class OpenAIProvider:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
-    ) -> str:
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[Dict]] = None
+    ) -> str | dict:
         """Generate chat completion"""
         try:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
-            return response.choices[0].message.content.strip()
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens
+            }
+            if tools:
+                # Format to OpenAI's expected structure
+                openai_tools = [{"type": "function", "function": tool} for tool in tools]
+                kwargs["tools"] = openai_tools
+
+            response = self.client.chat.completions.create(**kwargs)
+            message = response.choices[0].message
+            
+            # Check for tool call
+            if getattr(message, 'tool_calls', None) and len(message.tool_calls) > 0:
+                tool_call = message.tool_calls[0]
+                import json
+                try:
+                    args_dict = json.loads(tool_call.function.arguments)
+                except:
+                    args_dict = {}
+                return {
+                    "function_call": {
+                        "name": tool_call.function.name,
+                        "arguments": args_dict
+                    }
+                }
+            
+            return message.content.strip() if message.content else ""
         except Exception as e:
             logger.error(f"OpenAI API error: {e}")
             raise

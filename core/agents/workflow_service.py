@@ -6,7 +6,6 @@ import os
 import logging
 from datetime import datetime
 from typing import Dict, List, Optional
-import config
 
 from services.file_store_service import S3Storage
 
@@ -17,7 +16,7 @@ class WorkflowService:
     """Service for managing workflow configurations"""
     
     def __init__(self, storage_path: Optional[str] = None):
-        self.storage_path = storage_path or getattr(config, 'WORKFLOWS_STORAGE_PATH', 'storage/workflows.json')
+        self.storage_path = storage_path or os.environ.get('WORKFLOWS_STORAGE_PATH', 'workflows.json')
         self.storage = S3Storage()
     
     def load_workflows(self) -> Dict[str, Dict]:

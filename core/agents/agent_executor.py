@@ -1,4 +1,3 @@
-
 """
 Agent Executor - Executes agent conversations
 """
@@ -10,7 +9,6 @@ from typing import Dict, Optional, List, Any, Generator
 from core.web.app_tools import session
 from core.agents.agent_service import agent_service
 from core.llm.llm_factory import LLMFactory
-
 from core.agents.mcp_manager import mcp_manager
 from core.prompts.prompt_loader import load_prompt
 
@@ -41,6 +39,8 @@ class AgentExecutor:
             model=self.agent_config['llm_model']
         )
         
+
+        
         logger.info(f"Initialized executor for agent: {agent_id}")
     
     def get_system_prompt(self) -> str:
@@ -63,94 +63,7 @@ class AgentExecutor:
         """Get the agent's description"""
         return self.agent_config.get('description', '')
     
-    def _handle_tool_calls(self, response_text: str, session_context: Dict) -> tuple[str, bool]:
-        """
-        Process tool calls in LLM response and execute them
-        
-        Args:
-            response_text: LLM response that may contain tool calls
-            session_context: Session context for storing tool results
-        
-        Returns:
-            Tuple of (processed_response, has_tool_calls)
-        """
-        import json
-        
-        # Check if response contains tool calls
-        # Match entire tool call block and extract tool name and JSON manually
-        tool_call_blocks = re.findall(r'\[TOOL_CALL:\s*(\w+)\](.*?)\[/TOOL_CALL\]', response_text, re.DOTALL)
-        
-        if not tool_call_blocks:
-            return response_text, False
-        
-        # Parse each tool call block to extract JSON
-        tool_calls = []
-        for tool_name, content in tool_call_blocks:
-            # Extract JSON from content (find first { to last })
-            json_match = re.search(r'\{.*\}', content, re.DOTALL)
-            if json_match:
-                params_json = json_match.group(0)
-                tool_calls.append((tool_name, params_json))
-            else:
-                logger.warning(f"[Tool Handler] No JSON found in tool call for {tool_name}")
-        
-        if not tool_calls:
-            return response_text, False
-        
-        logger.info(f"[Tool Handler] Found {len(tool_calls)} tool call(s) in LLM response")
-        
-        # Process each tool call
-        tool_results = []
-        for tool_name, params_json in tool_calls:
-            try:
-                # Parse parameters
-                params = json.loads(params_json)
-                logger.info(f"[Tool Handler] Executing tool: {tool_name} with params: {params}")
-                
-                # Execute tool based on name
-                if tool_name == 'search_flights':
-                    result = self._execute_flight_search(params, session_context)
-                    tool_results.append({
-                        'tool': tool_name,
-                        'result': result
-                    })
-                elif tool_name == 'fetch_articles':
-                    result = self._execute_fetch_articles(params, session_context)
-                    tool_results.append({
-                        'tool': tool_name,
-                        'result': result
-                    })
-                else:
-                    logger.warning(f"[Tool Handler] Unknown tool: {tool_name}")
-                    tool_results.append({
-                        'tool': tool_name,
-                        'result': {'success': False, 'error': f'Unknown tool: {tool_name}'}
-                    })
-                    
-            except json.JSONDecodeError as e:
-                logger.error(f"[Tool Handler] Failed to parse tool params: {e}")
-                tool_results.append({
-                    'tool': tool_name,
-                    'result': {'success': False, 'error': f'Invalid parameters: {str(e)}'}
-                })
-            except Exception as e:
-                logger.error(f"[Tool Handler] Error executing tool {tool_name}: {e}")
-                tool_results.append({
-                    'tool': tool_name,
-                    'result': {'success': False, 'error': str(e)}
-                })
-        
-        # Store tool results in session context
-        session_context['last_tool_results'] = tool_results
-        
-        # Format tool results to inject back into conversation
-        tool_results_text = "\n\n"
-        for tr in tool_results:
-            tool_results_text += f"[TOOL_RESULT: {tr['tool']}]\n"
-            tool_results_text += json.dumps(tr['result'], indent=2)
-            tool_results_text += "\n[/TOOL_RESULT]\n\n"
-        
-        return tool_results_text, True
+    # _handle_tool_calls method removed (replaced by native tool calling)
     
     def _execute_flight_search(self, params: Dict, session_context: Dict) -> Dict:
         """Execute flight search tool"""
@@ -164,9 +77,10 @@ class AgentExecutor:
         try:
             # Use MCP tool if enabled
             if mcp_manager.is_tool_enabled('flight_api'):
-                result = mcp_manager.call_tool(
-                    tool_name='flights.search',
-                    input_data={
+                result = mcp_manager.execute_tool(
+                    tool_id='flight_api',
+                    tool_name='search',
+                    arguments={
                         'destination': destination,
                         'scheduled_dates': dates,
                         'preferred_times': times,
@@ -216,10 +130,11 @@ class AgentExecutor:
         logger.info(f"[Fetch Articles Tool] Fetching articles for: {destination}")
         
         try:
-            if mcp_manager.is_tool_enabled('nowboarding.articles'):
-                result = mcp_manager.call_tool(
-                   tool_name='nowboarding.articles',
-                    input_data={
+            if mcp_manager.is_tool_enabled('nowboarding'):
+                result = mcp_manager.execute_tool(
+                    tool_id='nowboarding',
+                    tool_name='fetch_articles',
+                    arguments={
                         'destination': destination,
                         'limit': limit
                     }
@@ -447,14 +362,153 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             # The LLM now handles extraction and decides when to call tools via prompts
             
             # Generate response
+            # Get available tools for the LLM
+            llm_tools = mcp_manager.get_tool_definitions_for_llm()
+            logger.info(f"[Agent Executor] Available tools for LLM: {[t['name'] for t in llm_tools]}")
+            
+            # Generate response
             logger.info(f"Generating response for agent {self.agent_id}")
-            response_text = self.llm_client.chat_completion(
+            
+            # Initial LLM call
+            response_data = self.llm_client.chat_completion(
                 messages=messages,
                 temperature=0.7,
-                max_tokens=2000
+                max_tokens=2000,
+                tools=llm_tools
             )
             
+            # Handle potential null response
+            if response_data is None:
+                logger.error("[Agent Executor] LLM returned None")
+                return {"response": "I encountered an error. Please try again.", "success": False}
+                
+            # Check if response is a string (text) or dict (function call)
+            response_text = ""
+            if isinstance(response_data, str):
+                response_text = response_data
+            
+            # Handle tool calls loop
+            max_tool_iterations = 5
+            tool_iteration = 0
+            
+            while tool_iteration < max_tool_iterations:
+                # If response is text, we're done (unless it happens to contain old-style regex, which we're deprecating)
+                if isinstance(response_data, str):
+                    response_text = response_data
+                    break
+                    
+                # If response is a function call
+                if isinstance(response_data, dict) and "function_call" in response_data:
+                    function_call = response_data["function_call"]
+                    tool_name_full = function_call.get("name")
+                    tool_args = function_call.get("arguments", {})
+                    
+                    logger.info(f"[Agent Executor] 🛠️ Processing tool call: {tool_name_full}")
+                    logger.info(f"[Agent Executor] Args: {tool_args}")
+                    
+                    # Parse tool name (format: toolid_funcname)
+                    # We need to find the matching tool config
+                    # Heuristic: split by first underscore, but some tool IDs have underscores
+                    # Better: check known tool IDs
+                    
+                    target_tool_id = None
+                    target_func_name = None
+                    
+                    # Try to match against enabled tools
+                    for tool_id in mcp_manager.get_enabled_tools():
+                        if tool_name_full.startswith(tool_id + "_"):
+                            target_tool_id = tool_id
+                            target_func_name = tool_name_full[len(tool_id)+1:]
+                            break
+                            
+                    if not target_tool_id:
+                        error_msg = f"Unknown tool: {tool_name_full}"
+                        logger.error(error_msg)
+                        # Feed error back to LLM
+                        messages.append({"role": "assistant", "content": None, "function_call": function_call}) # Track call?
+                        # Actually standard Gemini chat flow usually expects function response
+                        # For simplicity in this loop, we mimic the tool result message
+                        messages.append({"role": "user", "content": f"Tool '{tool_name_full}' execution failed: {error_msg}"})
+                    else:
+                        # Execute tool
+                        try:
+                            # Parse args if they are string (Gemini sometimes returns dict, sometimes string? Usually dict from our provider)
+                            if isinstance(tool_args, str):
+                                import json
+                                try:
+                                    tool_args = json.loads(tool_args)
+                                except:
+                                    pass # Keep as string if not json
+                                    
+                            result = mcp_manager.execute_tool(
+                                tool_id=target_tool_id,
+                                tool_name=target_func_name,
+                                arguments=tool_args
+                            )
+                            
+                            # Store context if needed (flight search)
+                            if target_tool_id == 'flight_api' and target_func_name == 'search':
+                                if result.get('success'):
+                                    session_context['selected_flights'] = result.get('flights', [])
+                                    session_context['destination'] = tool_args.get('destination')
+                                    # Normalize dates
+                                    dates_arg = tool_args.get('scheduled_dates', [])
+                                    if isinstance(dates_arg, str): dates_arg = [dates_arg]
+                                    session_context['primary_departure_date'] = dates_arg[0] if dates_arg else None
+
+                            # Store articles if fetched (for use in non-itinerary responses)
+                            elif target_tool_id == 'nowboarding' and target_func_name == 'fetch_articles':
+                                if result.get('success'):
+                                    session_context['recent_articles'] = result.get('articles', [])
+
+                            # Format result for LLM
+                            import json
+                            result_str = json.dumps(result, default=str)
+                            
+                            logger.info(f"[Agent Executor] Tool '{tool_name_full}' execution success.")
+                            logger.info(f"[Agent Executor] Result (first 1000 chars): {result_str[:1000]}")
+                            if len(result_str) > 1000:
+                                logger.info(f"[Agent Executor] ... (truncated, total length: {len(result_str)})")
+                            
+                            # Append interaction to history/messages
+                            # Note: To correctly maintain conversation state with Gemini, we should ideally send the function response 
+                            # as a specific "function_response" part. 
+                            # However, our abstraction layer uses a list of dicts. 
+                            # We'll treat the function result as a SYSTEM or USER message for the LLM to digest.
+                            # A common pattern for generic generic adaptation:
+                            # 1. Assistant: Function Call
+                            # 2. User: Function Result
+                            
+                            messages.append({"role": "user", "content": f"Function '{tool_name_full}' result:\n{result_str}"})
+                            
+                        except Exception as e:
+                            logger.error(f"[Agent Executor] Tool execution error: {e}")
+                            messages.append({"role": "user", "content": f"Function '{tool_name_full}' failed: {str(e)}"})
+                    
+                    # Get next response
+                    response_data = self.llm_client.chat_completion(
+                        messages=messages,
+                        temperature=0.7,
+                        max_tokens=2000,
+                        tools=llm_tools
+                    )
+                    
+                    tool_iteration += 1
+                else:
+                    # Unknown response type or end of conversation
+                    break
+            
+            if tool_iteration >= max_tool_iterations:
+                logger.warning("[Agent Executor] Max tool iterations reached")
+                if isinstance(response_data, dict):
+                    response_text = "I'm sorry, I'm getting stuck in a loop of operations. Please try again."
+                
             # Clean up markdown code blocks if present
+            # Assign final text response
+            if isinstance(response_data, str):
+                response_text = response_data
+            
+            # Clean up standard markdown
             response_text = response_text.strip()
             if response_text.startswith('```html'):
                 response_text = response_text[7:]
@@ -464,46 +518,8 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 response_text = response_text[:-3]
             response_text = response_text.strip()
             
-            # Handle tool calls in response (NEW: Prompt-driven tool calling)
-            logger.info(f"[Agent Executor] LLM Response (first 500 chars): {response_text[:500]}")
-            logger.info(f"[Agent Executor] Checking for tool calls in response...")
-            
-            max_tool_iterations = 3  # Prevent infinite loops
-            tool_iteration = 0
-            while tool_iteration < max_tool_iterations:
-                tool_results_text, has_tool_calls = self._handle_tool_calls(response_text, session_context)
-                
-                if not has_tool_calls:
-                    logger.info(f"[Agent Executor] No tool calls found in iteration {tool_iteration}")
-                    break
-                
-                logger.info(f"[Tool Handler] Tool calls detected, iteration {tool_iteration + 1}")
-                
-                # Add tool results to conversation and get LLM response
-                messages.append({"role": "assistant", "content": response_text})
-                messages.append({"role": "user", "content": f"Tool execution results:{tool_results_text}\n\nNow proceed with generating the complete itinerary."})
-                
-                # Get next response from LLM
-                response_text = self.llm_client.chat_completion(
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=2000
-                )
-                
-                # Clean up markdown again
-                response_text = response_text.strip()
-                if response_text.startswith('```html'):
-                    response_text = response_text[7:]
-                if response_text.startswith('```'):
-                    response_text = response_text[3:]
-                if response_text.endswith('```'):
-                    response_text = response_text[:-3]
-                response_text = response_text.strip()
-                
-                tool_iteration += 1
-            
-            if tool_iteration >= max_tool_iterations:
-                logger.warning("[Tool Handler] Max tool iterations reached")
+            # Legacy regex tool handling REMOVED
+            # We now rely fully on the native function calling loop above
             
             # Convert common markdown to HTML (for all agents that return HTML)
             # Check if response contains HTML-like structure or recommendation cards
@@ -565,41 +581,31 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             
             # If itinerary content detected but missing required info, inject a reminder
             # Only require: destination, duration, and travel dates (removed holiday_type requirement)
-            if has_itinerary_content and is_travel_agent and not (has_destination and has_duration and has_travel_date):
-                missing_info = []
-                if not has_duration:
-                    missing_info.append("Duration (how many days)")
-                if not has_travel_date:
-                    missing_info.append("Travel Dates (when are you traveling)")
-                if not has_destination:
-                    missing_info.append("Destination (where are you going)")
-                
-                # Replace the response with a reminder to gather information
-                if missing_info:
-                    response_text = f"I'd love to help you plan your trip! ✈️ But first, I need a few more details to create the perfect itinerary for you. I still need: {', '.join(missing_info)}."
-                    if not has_duration:
-                        response_text += " Let's start with: How many days are you planning for this trip?"
-                    elif not has_travel_date:
-                        response_text += " When are you planning to travel?"
-                    elif not has_destination:
-                        response_text += " Which destination are you planning to visit?"
-                has_itinerary_content = False  # Reset flag
+            # BLOCK REMOVED: Trust the LLM's output.
+            # Previously, we intercepted responses that looked like itineraries but were missing
+            # strict metadata (duration, dates) and replaced them with a generic "I need info" message.
+            # This caused valid itineraries inferred from context to be hidden.
+            # We now allow the LLM to manage the conversation flow.
+            
+            # if has_itinerary_content and is_travel_agent and not (has_destination and has_duration and has_travel_date):
+            #     ... (logic removed) ...
+            #     has_itinerary_content = False
             
             # If it's a travel agent and response contains itinerary, format it for display
             # Only proceed if we have all required information (destination, duration, travel_date)
             logger.info(f"[Agent Executor] Checking itinerary conditions: is_travel_agent={is_travel_agent}, has_itinerary_content={has_itinerary_content}, has_destination={has_destination}, has_duration={has_duration}, has_travel_date={has_travel_date}")
-            if is_travel_agent and has_itinerary_content and (has_destination and has_duration and has_travel_date):
-                logger.info(f"[Agent Executor] ✅ ALL CONDITIONS MET - Processing itinerary for display")
+            if is_travel_agent and has_itinerary_content:
+                logger.info(f"[Agent Executor] ✅ ITINERARY DETECTED - Processing for display")
                 # Extract metadata for summary card (optional, not for validation)
                 # These are just for display purposes in the UI
                 # Retrieve destination from session context (set by flight search tool)
-                destination = session_context.get('destination')
-                duration = self._extract_duration(user_message, response_text)
-                pace = self._extract_pace(user_message, response_text)
+                destination = session_context.get('destination') or self._extract_destination(user_message, response_text) or "your destination"
+                duration = self._extract_duration(user_message, response_text) or "Trip"
+                pace = self._extract_pace(user_message, response_text) or "Relaxed"
                 
                 # Get flights if available
                 selected_flights = session_context.get('selected_flights', [])
-                primary_departure_date = session_context.get('primary_departure_date') or session_context.get('travel_date')
+                primary_departure_date = session_context.get('primary_departure_date') or session_context.get('travel_date') or "Upcoming"
                 
                 # Get arrival time from first flight if available
                 arrival_time = None
@@ -648,11 +654,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     try:
                         # Use MCP tool to format flight options, with fallback if it fails
                         flight_options_html = ''
-                        if mcp_manager.is_tool_enabled('flights.format') and destination:
+                        if mcp_manager.is_tool_enabled('flight_api') and destination:
                             try:
-                                format_result = mcp_manager.call_tool(
-                                    tool_name='flights.format',
-                                    input_data={
+                                format_result = mcp_manager.execute_tool(
+                                    tool_id='flight_api',
+                                    tool_name='format',
+                                    arguments={
                                         'flights': selected_flights,
                                         'destination': destination,
                                         'departure_date': primary_departure_date,
@@ -704,7 +711,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     flight_options_html = ''
                 
                 # Enhance itinerary with MCP-generated travel content links
-                travel_content_enabled = mcp_manager.is_tool_enabled('travel.generate-links')
+                travel_content_enabled = mcp_manager.is_tool_enabled('travel_content')
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Tool enabled check: {travel_content_enabled}")
                 
                 if travel_content_enabled:
@@ -724,11 +731,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 
                 # Extract locations from itinerary using MCP tool, with fallback if it fails
                 locations = []
-                if mcp_manager.is_tool_enabled('maps.locations') and destination:
+                if mcp_manager.is_tool_enabled('maps') and destination:
                     try:
-                        maps_result = mcp_manager.call_tool(
-                            tool_name='maps.locations',
-                            input_data={
+                        maps_result = mcp_manager.execute_tool(
+                            tool_id='maps',
+                            tool_name='extract_locations',
+                            arguments={
                                 'itinerary_html': response_text,
                                 'destination': destination
                             }
@@ -754,11 +762,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     # Capitalize first letter of each word
                     clean_destination = clean_destination.title()
                 
-                if mcp_manager.is_tool_enabled('nowboarding.articles') and clean_destination:
+                if mcp_manager.is_tool_enabled('nowboarding') and clean_destination:
                     try:
-                        articles_result = mcp_manager.call_tool(
-                            tool_name='nowboarding.articles',
-                            input_data={
+                        articles_result = mcp_manager.execute_tool(
+                            tool_id='nowboarding',
+                            tool_name='fetch_articles',
+                            arguments={
                                 'destination': clean_destination,
                                 'limit': 3
                             }
@@ -893,12 +902,20 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             logger.info(f"[Agent Executor]   - is_travel_agent: {is_travel_agent}")
             logger.info(f"[Agent Executor]   - Conditions check: has_destination={has_destination}, has_duration={has_duration}, has_travel_date={has_travel_date}")
             
-            return {
+            response_dict = {
                 'response': response_text,
                 'success': True,
                 'agent_id': self.agent_id,
                 'agent_name': self.get_agent_name()
             }
+            
+            # If the agent just fetched articles, display them even without an itinerary
+            recent_articles = session_context.get('recent_articles')
+            if recent_articles:
+                response_dict['articles'] = recent_articles
+                response_dict['show_panel'] = True
+                
+            return response_dict
             
         except Exception as e:
             logger.error(f"Error executing agent chat: {e}")
@@ -1010,8 +1027,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 "success": False,
                 "agent_id": self.agent_id
             }
-
-    @staticmethod
+    
     def _extract_destination(self, user_message: str, response_text: str) -> Optional[str]:
         """Extract destination from user message or response"""
         # Common destination patterns
@@ -1036,7 +1052,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 return match.group(1).strip()
         
         return None
-    @staticmethod
+    
     def _extract_duration(self, user_message: str, response_text: str) -> Optional[str]:
         """Extract duration from user message"""
         # Normalize message for matching
@@ -1077,8 +1093,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     return 'Weekend'
                 return match.group(0)
         return None
-
-    @staticmethod
+    
     def _extract_pace(self, user_message: str, response_text: str) -> Optional[str]:
         """Extract pace preference"""
         text_lower = (user_message + ' ' + response_text).lower()
@@ -1170,8 +1185,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         locations = self._geocode_locations(locations[:20], destination)
         
         return locations
-
-    @staticmethod
+    
     def _geocode_locations(self, locations: List[Dict], destination: Optional[str]) -> List[Dict]:
         """Geocode a list of locations using OpenStreetMap Nominatim API"""
         if not locations:
@@ -1226,8 +1240,8 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         logger.info(f"[Agent Executor] ✅ Geocoded {geocoded_count}/{len(locations)} locations successfully")
         
         return geocoded_locations
-
-    @staticmethod
+    
+    
     def _fetch_nowboarding_articles(self, destination: Optional[str], limit: int = 3) -> List[Dict]:
         """Fetch Now Boarding articles for destination"""
         if not destination:
@@ -1281,8 +1295,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             logger.error(f"Traceback: {traceback.format_exc()}")
         
         return articles
-
-    @staticmethod
+    
     def _adjust_itinerary_by_arrival_time(self, itinerary_html: str, arrival_time: str) -> str:
         """Adjust Day 1 itinerary based on arrival time"""
         import re
@@ -1608,7 +1621,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Cleaned activity name: '{activity_name}' -> '{cleaned_activity}'")
         
         # Check if travel_content tool is enabled
-        is_enabled = mcp_manager.is_tool_enabled('travel.generate-links')
+        is_enabled = mcp_manager.is_tool_enabled('travel_content')
         logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Tool enabled: {is_enabled}")
         
         # Build search query with destination if available
@@ -1626,12 +1639,10 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         if is_enabled:
             try:
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Calling lonely_planet_url for: '{search_query}'")
-                lp_result = mcp_manager.call_tool(
-                    tool_name='travel.generate-links',
-                    input_data={
-                        'type': 'lonely_planet',
-                        'attraction_name': search_query
-                    }
+                lp_result = mcp_manager.execute_tool(
+                    tool_id='travel_content',
+                    tool_name='lonely_planet_url',
+                    arguments={'attraction_name': search_query}
                 )
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Lonely Planet result: {lp_result}")
                 if lp_result.get('success'):
@@ -1654,12 +1665,10 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         if is_enabled:
             try:
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Calling trip_com_url for: '{search_query}'")
-                trip_result = mcp_manager.call_tool(
-                    tool_name='travel.generate-links',
-                    input_data={
-                        'type': 'trip_com',
-                        'attraction_name': search_query
-                    }
+                trip_result = mcp_manager.execute_tool(
+                    tool_id='travel_content',
+                    tool_name='trip_com_url',
+                    arguments={'attraction_name': search_query}
                 )
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Trip.com result: {trip_result}")
                 if trip_result.get('success'):
@@ -1688,7 +1697,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         logger.debug(f"[Agent Executor] 🔗 [Travel Content MCP] Generated HTML: {links_html[:200]}...")
         
         return links_html
-    #TODO Need to use new MCP for this
+    
     def _enhance_itinerary_with_mcp_links(self, itinerary_html: str, destination: Optional[str] = None) -> str:
         """
         Extract activity names from itinerary HTML and generate proper links using MCP tools.
@@ -1883,14 +1892,13 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         
         logger.info(f"[Agent Executor] ✅ [Travel Content MCP] Enhancement complete: {enhanced_count} enhanced, {skipped_count} skipped, {error_count} errors")
         return enhanced_html
-    @staticmethod
+    
     def _extract_and_add_time_blocks(self, html_text: str, destination: Optional[str]) -> str:
         """Extract time blocks from HTML that has day cards but missing time blocks"""
         import re
         logger.warning(f"[Agent Executor] HTML structure found but time blocks missing - cannot auto-extract")
         return html_text
-
-    @staticmethod
+    
     def _create_summary_card(self, destination: Optional[str], duration: Optional[str], pace: Optional[str]) -> str:
         """Create a summary card HTML for the chat"""
         dest_display = destination or 'Your Destination'

@@ -12,16 +12,7 @@ s3_bucket = "cjss-dr-artifacts"
 
 s3_prefix = "cjss-dr"
 disable_rollback = false
-parameter_overrides = """
-AgentFunctionName=changi-dr-chat
-OpenAIKey=YOUR_OPENAI_KEY
-GeminiKey=YOUR_GEMINI_KEY
-ChangiApiKey=YOUR_CHANGI_KEY
-FileBucketName=cjss-dr-artifacts
-SessionTTL=3600
-McpApiUrl=https://xxxx.execute-api.ap-south-1.amazonaws.com/Prod/mcp/
-McpApiKey=YOUR_API_KEY
-"""
+parameter_overrides = "AgentFunctionName=changi-dr-chat OpenAIKey=YOUR_OPENAI_KEY_____ GeminiKey=AIzaSyB99N9SoAtMvPoO4XNYOrWmBITZ-5EN0ks ChangiApiKey=da2-rkyh2gb2kvft3oco3l6eaqmlb4 FileBucketName=cjss-dr-artifacts SessionTTL=3600 McpApiUrl=https://ihrl2tdv65.execute-api.ap-south-1.amazonaws.com/Prod/mcp/ McpApiKey=fnSwS521Wh241LmdWwMMZPwYNlKSt0saH86ROqo1"
 
 
 image_repositories = []

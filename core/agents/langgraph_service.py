@@ -213,6 +213,7 @@ class LangGraphService:
 
             
             # Add edges
+            has_start_edge = False
             for edge in edges:
                 source = edge.get('source')
                 target = edge.get('target')
@@ -224,6 +225,7 @@ class LangGraphService:
                 # Handle start node
                 if source_node.get('type') == 'start':
                     source = START
+                    has_start_edge = True
                 
                 # Handle end node
                 if target_node.get('type') == 'end':
@@ -251,6 +253,25 @@ class LangGraphService:
                 else:
                     # Regular edge
                     graph.add_edge(source, target)
+            
+            # If no START edge was explicitly defined via a 'start' node type, 
+            # try to auto-detect the start node (a node with no incoming edges)
+            if not has_start_edge and nodes:
+                targets = {edge.get('target') for edge in edges}
+                start_node_id = None
+                
+                for node in nodes:
+                    if node['id'] not in targets and node.get('type') != 'end':
+                        start_node_id = node['id']
+                        break
+                        
+                # Fallback to the first node if we can't find one without incoming edges
+                if not start_node_id and nodes:
+                    start_node_id = nodes[0]['id']
+                    
+                if start_node_id:
+                    graph.add_edge(START, start_node_id)
+                    logger.info(f"[LangGraph] Auto-added edge from START to entrypoint node: {start_node_id}")
             
             # Compile the graph
             compiled = graph.compile()

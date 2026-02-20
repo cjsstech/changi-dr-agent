@@ -30,8 +30,9 @@ class GeminiProvider:
         self,
         messages: List[Dict[str, str]],
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None
-    ) -> str:
+        max_tokens: Optional[int] = None,
+        tools: Optional[List[Dict]] = None
+    ) -> str | dict:
         """Generate chat completion"""
         try:
             # Convert messages format for Gemini
@@ -65,10 +66,17 @@ class GeminiProvider:
             
             logger.info(f"[Gemini] Sending request with max_output_tokens={generation_config['max_output_tokens']}")
             
+            # Format tools for Gemini if provided
+            gemini_tools = None
+            if tools:
+                gemini_tools = [{'function_declarations': tools}]
+                logger.info(f"[Gemini] Passing tools to Gemini: {[t.get('name') for t in tools]}")
+            
             response = self.client.generate_content(
                 prompt,
                 generation_config=generation_config,
-                safety_settings=safety_settings
+                safety_settings=safety_settings,
+                tools=gemini_tools
             )
             
             # Log detailed response info
@@ -78,14 +86,45 @@ class GeminiProvider:
                 logger.info(f"[Gemini] Finish reason: {finish_reason}")
                 if hasattr(candidate, 'safety_ratings'):
                     logger.info(f"[Gemini] Safety ratings: {candidate.safety_ratings}")
+                
+                # Check for function call
+                if candidate.content and candidate.content.parts:
+                    for part in candidate.content.parts:
+                        if hasattr(part, 'function_call') and part.function_call:
+                            fc = part.function_call
+                            logger.info(f"[Gemini] Function call detected: {fc.name}")
+                            
+                            # Convert protobuf Map to dict safely
+                            args_dict = {}
+                            if hasattr(fc, 'args'):
+                                try:
+                                    # Convert to standard dict
+                                    for key, value in fc.args.items():
+                                        args_dict[key] = value
+                                except:
+                                    pass
+                                    
+                            return {
+                                "function_call": {
+                                    "name": fc.name,
+                                    "arguments": args_dict
+                                }
+                            }
             
             # Check if response was blocked or empty
-            if not response.text:
+            # Return text if no function call
+            text = ""
+            try:
+                text = response.text
+            except ValueError:
+                text = ""
+                
+            if not text:
                 logger.warning(f"Gemini returned empty response. Finish reason: {response.candidates[0].finish_reason if response.candidates else 'unknown'}")
                 return "I apologize, but I couldn't generate a response. Please try again."
             
-            logger.info(f"[Gemini] Response length: {len(response.text)} chars")
-            return response.text.strip()
+            logger.info(f"[Gemini] Response length: {len(text)} chars")
+            return text.strip()
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
             raise
