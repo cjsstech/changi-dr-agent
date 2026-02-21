@@ -118,17 +118,6 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref SessionsTable
 
-
-
-      Environment:
-        Variables:
-          OPENAI_API_KEY: !Ref OpenAIKey
-          GEMINI_API_KEY: !Ref GeminiKey
-          CHANGI_API_KEY: !Ref ChangiApiKey
-          FILE_BUCKET: !Ref FileBucketName
-          SESSION_TTL_SECONDS: !Ref SessionTTL
-          MCP_SERVER_URL: "http://host.docker.internal:8001"
-
       Events:
         MCPApi:
           Type: Api
