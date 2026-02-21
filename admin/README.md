@@ -75,7 +75,7 @@ Edit `config.py` or use environment variables:
 | `ADMIN_USERNAME` | Admin login username | `admin` |
 | `ADMIN_PASSWORD` | Admin login password | `admin` |
 | `PORT` | Server port | `5050` |
-| `MCP_SERVER_URL` | MCP server endpoint | `http://localhost:8001` |
+| `MCP_SERVER_URL` | MCP server endpoint | `http://localhost:8002/mcp` |
 
 ## Integrating with Your Project
 

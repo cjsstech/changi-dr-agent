@@ -150,7 +150,7 @@
 
     <!-- Loading Overlay -->
     <script>
-        const MCP_SERVER_URL = "{{ mcp_server_url|default('http://localhost:8001') }}";
+        const MCP_SERVER_URL = "{{ mcp_server_url|default('http://localhost:8002/mcp') }}";
         const agentId = "{{ agent.id if agent else '' }}";
         const API_BASE = "{{ url_for('index').rstrip('/') }}";
         const isWorkflow = {{ 'true' if is_workflow|default (false) else 'false' }};

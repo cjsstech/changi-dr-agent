@@ -24,7 +24,7 @@ DEFAULT_AGENT_ID = os.getenv('DEFAULT_AGENT_ID', 'travel-bot-default')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
 # MCP Server Configuration
-MCP_SERVER_URL = os.getenv('MCP_SERVER_URL', 'http://localhost:8001')
+MCP_SERVER_URL = os.getenv('MCP_SERVER_URL', 'http://localhost:8002/mcp')
 
 # Default LLM provider
 DEFAULT_LLM_PROVIDER = os.getenv('DEFAULT_LLM_PROVIDER', 'gemini')
@@ -36,5 +36,5 @@ DEFAULT_LLM_MODEL = os.getenv('DEFAULT_LLM_MODEL', 'gemini-2.5-flash')
 # OPENAI_API_KEY=your_api_key_here
 # GEMINI_API_KEY=your_gemini_key_here
 # DEFAULT_AGENT_ID=your_default_agent_id
-# MCP_SERVER_URL=http://localhost:8001
+# MCP_SERVER_URL=http://localhost:8002/mcp
 

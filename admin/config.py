@@ -14,7 +14,7 @@ S3_PREFIX_WORKFLOWS = os.environ.get("S3_PREFIX_WORKFLOWS", "workflows/")
 S3_PREFIX_PROMPTS = os.environ.get("S3_PREFIX_PROMPTS", "prompts/")
 S3_PREFIX_FILES = os.environ.get("S3_PREFIX_FILES", "files/")
 
-MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL","http://localhost:8001")
+MCP_SERVER_URL = os.environ.get("MCP_SERVER_URL","http://localhost:8002/mcp")
 
 
 DEFAULT_LLM_PROVIDER = os.environ.get("DEFAULT_LLM_PROVIDER","openai")
