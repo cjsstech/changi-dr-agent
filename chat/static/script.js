@@ -376,13 +376,13 @@ async function checkVisaRequirements() {
 
         const data = await response.json();
 
-        if (data.success) {
-            resultContainer.innerHTML = generateVisaResultCard(data);
+        if (data.result?.success) {
+            resultContainer.innerHTML = generateVisaResultCard(data.result);
         } else {
             resultContainer.innerHTML = `
                 <div class="visa-error-message">
-                    ${data.error || 'Unable to find visa information.'}<br>
-                    ${data.suggestion || 'Please check with the destination country\'s embassy.'}
+                    ${data.result?.error || 'Unable to find visa information.'}<br>
+                    ${data.result?.suggestion || 'Please check with the destination country\'s embassy.'}
                 </div>
             `;
         }
