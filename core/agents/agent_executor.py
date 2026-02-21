@@ -38,9 +38,7 @@ class AgentExecutor:
             provider=self.agent_config['llm_provider'],
             model=self.agent_config['llm_model']
         )
-        
 
-        
         logger.info(f"Initialized executor for agent: {agent_id}")
     
     def get_system_prompt(self) -> str:
@@ -76,10 +74,9 @@ class AgentExecutor:
         
         try:
             # Use MCP tool if enabled
-            if mcp_manager.is_tool_enabled('flight_api'):
-                result = mcp_manager.execute_tool(
-                    tool_id='flight_api',
-                    tool_name='search',
+            if mcp_manager.is_tool_enabled('flights.search'):
+                result = mcp_manager.call_tool(
+                    tool_name='flights.search',
                     arguments={
                         'destination': destination,
                         'scheduled_dates': dates,
@@ -99,7 +96,7 @@ class AgentExecutor:
                     return result
             else:
                 # Fallback to direct call
-                from flight_service import search_flights_by_destination
+                from changi_flight_service import search_flights_by_destination
                 flights = search_flights_by_destination(
                     destination, 
                     dates,
@@ -130,10 +127,9 @@ class AgentExecutor:
         logger.info(f"[Fetch Articles Tool] Fetching articles for: {destination}")
         
         try:
-            if mcp_manager.is_tool_enabled('nowboarding'):
-                result = mcp_manager.execute_tool(
-                    tool_id='nowboarding',
-                    tool_name='fetch_articles',
+            if mcp_manager.is_tool_enabled('nowboarding.fetch_articles'):
+                result = mcp_manager.call_tool(
+                    tool_name='nowboarding.fetch_articles',
                     arguments={
                         'destination': destination,
                         'limit': limit
@@ -363,7 +359,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             
             # Generate response
             # Get available tools for the LLM
-            llm_tools = mcp_manager.get_tool_definitions_for_llm()
+            llm_tools = list(mcp_manager.tools.values())
             logger.info(f"[Agent Executor] Available tools for LLM: {[t['name'] for t in llm_tools]}")
             
             # Generate response
@@ -400,64 +396,55 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 # If response is a function call
                 if isinstance(response_data, dict) and "function_call" in response_data:
                     function_call = response_data["function_call"]
-                    tool_name_full = function_call.get("name")
-                    tool_args = function_call.get("arguments", {})
+                    mcp_tool_name = function_call.get("name")
+                    mcp_tool_args = function_call.get("arguments", {})
                     
-                    logger.info(f"[Agent Executor] 🛠️ Processing tool call: {tool_name_full}")
-                    logger.info(f"[Agent Executor] Args: {tool_args}")
-                    
+                    logger.info(f"[Agent Executor] 🛠️ Processing tool call: {mcp_tool_name}")
+                    logger.info(f"[Agent Executor] Args: {mcp_tool_args}")
+
                     # Parse tool name (format: toolid_funcname)
                     # We need to find the matching tool config
                     # Heuristic: split by first underscore, but some tool IDs have underscores
                     # Better: check known tool IDs
-                    
-                    target_tool_id = None
-                    target_func_name = None
-                    
-                    # Try to match against enabled tools
-                    for tool_id in mcp_manager.get_enabled_tools():
-                        if tool_name_full.startswith(tool_id + "_"):
-                            target_tool_id = tool_id
-                            target_func_name = tool_name_full[len(tool_id)+1:]
-                            break
-                            
-                    if not target_tool_id:
-                        error_msg = f"Unknown tool: {tool_name_full}"
+
+
+
+                    if not mcp_manager.is_tool_enabled(mcp_tool_name) :
+                        error_msg = f"Unknown tool: {mcp_tool_name}"
                         logger.error(error_msg)
                         # Feed error back to LLM
                         messages.append({"role": "assistant", "content": None, "function_call": function_call}) # Track call?
                         # Actually standard Gemini chat flow usually expects function response
                         # For simplicity in this loop, we mimic the tool result message
-                        messages.append({"role": "user", "content": f"Tool '{tool_name_full}' execution failed: {error_msg}"})
+                        messages.append({"role": "user", "content": f"Tool '{mcp_tool_name}' execution failed: {error_msg}"})
                     else:
                         # Execute tool
                         try:
                             # Parse args if they are string (Gemini sometimes returns dict, sometimes string? Usually dict from our provider)
-                            if isinstance(tool_args, str):
+                            if isinstance(mcp_tool_args, str):
                                 import json
                                 try:
-                                    tool_args = json.loads(tool_args)
+                                    mcp_tool_args = json.loads(mcp_tool_args)
                                 except:
                                     pass # Keep as string if not json
                                     
-                            result = mcp_manager.execute_tool(
-                                tool_id=target_tool_id,
-                                tool_name=target_func_name,
-                                arguments=tool_args
+                            result = mcp_manager.call_tool(
+                                tool_name=mcp_tool_name,
+                                arguments=mcp_tool_args
                             )
                             
                             # Store context if needed (flight search)
-                            if target_tool_id == 'flight_api' and target_func_name == 'search':
+                            if mcp_tool_name == 'flights.search':
                                 if result.get('success'):
                                     session_context['selected_flights'] = result.get('flights', [])
-                                    session_context['destination'] = tool_args.get('destination')
+                                    session_context['destination'] = mcp_tool_args.get('destination')
                                     # Normalize dates
-                                    dates_arg = tool_args.get('scheduled_dates', [])
+                                    dates_arg = mcp_tool_args.get('scheduled_dates', [])
                                     if isinstance(dates_arg, str): dates_arg = [dates_arg]
                                     session_context['primary_departure_date'] = dates_arg[0] if dates_arg else None
 
                             # Store articles if fetched (for use in non-itinerary responses)
-                            elif target_tool_id == 'nowboarding' and target_func_name == 'fetch_articles':
+                            elif mcp_tool_name == 'nowboarding.fetch_articles':
                                 if result.get('success'):
                                     session_context['recent_articles'] = result.get('articles', [])
 
@@ -465,7 +452,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                             import json
                             result_str = json.dumps(result, default=str)
                             
-                            logger.info(f"[Agent Executor] Tool '{tool_name_full}' execution success.")
+                            logger.info(f"[Agent Executor] Tool '{mcp_tool_name}' execution success.")
                             logger.info(f"[Agent Executor] Result (first 1000 chars): {result_str[:1000]}")
                             if len(result_str) > 1000:
                                 logger.info(f"[Agent Executor] ... (truncated, total length: {len(result_str)})")
@@ -479,11 +466,11 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                             # 1. Assistant: Function Call
                             # 2. User: Function Result
                             
-                            messages.append({"role": "user", "content": f"Function '{tool_name_full}' result:\n{result_str}"})
+                            messages.append({"role": "user", "content": f"Function '{mcp_tool_name}' result:\n{result_str}"})
                             
                         except Exception as e:
                             logger.error(f"[Agent Executor] Tool execution error: {e}")
-                            messages.append({"role": "user", "content": f"Function '{tool_name_full}' failed: {str(e)}"})
+                            messages.append({"role": "user", "content": f"Function '{mcp_tool_name}' failed: {str(e)}"})
                     
                     # Get next response
                     response_data = self.llm_client.chat_completion(
@@ -654,11 +641,10 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     try:
                         # Use MCP tool to format flight options, with fallback if it fails
                         flight_options_html = ''
-                        if mcp_manager.is_tool_enabled('flight_api') and destination:
+                        if mcp_manager.is_tool_enabled('flights.format') and destination: #previously tool_name is flight_api
                             try:
-                                format_result = mcp_manager.execute_tool(
-                                    tool_id='flight_api',
-                                    tool_name='format',
+                                format_result = mcp_manager.call_tool(
+                                    tool_name='flights.format',
                                     arguments={
                                         'flights': selected_flights,
                                         'destination': destination,
@@ -671,7 +657,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                                 else:
                                     logger.warning(f"[Agent Executor] MCP flight format failed: {format_result.get('error')}, falling back to direct call")
                                     # Fallback to direct import if MCP fails
-                                    from flight_service import format_flight_options_for_itinerary
+                                    from changi_flight_service import format_flight_options_for_itinerary
                                     flight_options_html = format_flight_options_for_itinerary(
                                         selected_flights,
                                         destination,
@@ -681,7 +667,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                             except Exception as e:
                                 logger.warning(f"[Agent Executor] MCP flight format error: {e}, falling back to direct call")
                                 # Fallback to direct import if MCP fails
-                                from flight_service import format_flight_options_for_itinerary
+                                from changi_flight_service import format_flight_options_for_itinerary
                                 flight_options_html = format_flight_options_for_itinerary(
                                     selected_flights,
                                     destination,
@@ -690,7 +676,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                                 )
                         else:
                             # Direct import if MCP not enabled
-                            from flight_service import format_flight_options_for_itinerary
+                            from changi_flight_service import format_flight_options_for_itinerary
                             flight_options_html = format_flight_options_for_itinerary(
                                 selected_flights,
                                 destination,
@@ -711,7 +697,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     flight_options_html = ''
                 
                 # Enhance itinerary with MCP-generated travel content links
-                travel_content_enabled = mcp_manager.is_tool_enabled('travel_content')
+                travel_content_enabled = mcp_manager.is_tool_enabled('travel_content.links') #previously tool_name is travel_content
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Tool enabled check: {travel_content_enabled}")
                 
                 if travel_content_enabled:
@@ -731,11 +717,10 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 
                 # Extract locations from itinerary using MCP tool, with fallback if it fails
                 locations = []
-                if mcp_manager.is_tool_enabled('maps') and destination:
+                if mcp_manager.is_tool_enabled('maps.extract_locations') and destination: #previously tool_name is maps
                     try:
-                        maps_result = mcp_manager.execute_tool(
-                            tool_id='maps',
-                            tool_name='extract_locations',
+                        maps_result = mcp_manager.call_tool(
+                            tool_name='maps.extract_locations',
                             arguments={
                                 'itinerary_html': response_text,
                                 'destination': destination
@@ -762,11 +747,10 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     # Capitalize first letter of each word
                     clean_destination = clean_destination.title()
                 
-                if mcp_manager.is_tool_enabled('nowboarding') and clean_destination:
+                if mcp_manager.is_tool_enabled('nowboarding.fetch_articles') and clean_destination: #previously tool_name is nowboarding
                     try:
-                        articles_result = mcp_manager.execute_tool(
-                            tool_id='nowboarding',
-                            tool_name='fetch_articles',
+                        articles_result = mcp_manager.call_tool(
+                            tool_name='nowboarding.fetch_articles',
                             arguments={
                                 'destination': clean_destination,
                                 'limit': 3
@@ -1295,7 +1279,8 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             logger.error(f"Traceback: {traceback.format_exc()}")
         
         return articles
-    
+
+    @staticmethod
     def _adjust_itinerary_by_arrival_time(self, itinerary_html: str, arrival_time: str) -> str:
         """Adjust Day 1 itinerary based on arrival time"""
         import re
@@ -1621,7 +1606,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Cleaned activity name: '{activity_name}' -> '{cleaned_activity}'")
         
         # Check if travel_content tool is enabled
-        is_enabled = mcp_manager.is_tool_enabled('travel_content')
+        is_enabled = mcp_manager.is_tool_enabled('travel_content.links') #previously tool_name is travel_content
         logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Tool enabled: {is_enabled}")
         
         # Build search query with destination if available
@@ -1639,10 +1624,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         if is_enabled:
             try:
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Calling lonely_planet_url for: '{search_query}'")
-                lp_result = mcp_manager.execute_tool(
-                    tool_id='travel_content',
-                    tool_name='lonely_planet_url',
-                    arguments={'attraction_name': search_query}
+                lp_result = mcp_manager.call_tool(
+                    tool_name='travel_content.links', #previously tool_name is travel_content
+                    arguments={
+                        'link_type': 'lonely_planet_url',
+                        'attraction_name': search_query
+                    }
                 )
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Lonely Planet result: {lp_result}")
                 if lp_result.get('success'):
@@ -1665,10 +1652,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         if is_enabled:
             try:
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Calling trip_com_url for: '{search_query}'")
-                trip_result = mcp_manager.execute_tool(
-                    tool_id='travel_content',
-                    tool_name='trip_com_url',
-                    arguments={'attraction_name': search_query}
+                trip_result = mcp_manager.call_tool( #previously tool_name is travel_content
+                    tool_name='travel_content.links',
+                    arguments={
+                        'link_type': 'trip_com_url',
+                        'attraction_name': search_query
+                    }
                 )
                 logger.info(f"[Agent Executor] 🔗 [Travel Content MCP] Trip.com result: {trip_result}")
                 if trip_result.get('success'):
@@ -1892,13 +1881,15 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         
         logger.info(f"[Agent Executor] ✅ [Travel Content MCP] Enhancement complete: {enhanced_count} enhanced, {skipped_count} skipped, {error_count} errors")
         return enhanced_html
-    
+
+    @staticmethod
     def _extract_and_add_time_blocks(self, html_text: str, destination: Optional[str]) -> str:
         """Extract time blocks from HTML that has day cards but missing time blocks"""
         import re
         logger.warning(f"[Agent Executor] HTML structure found but time blocks missing - cannot auto-extract")
         return html_text
-    
+
+    @staticmethod
     def _create_summary_card(self, destination: Optional[str], duration: Optional[str], pace: Optional[str]) -> str:
         """Create a summary card HTML for the chat"""
         dest_display = destination or 'Your Destination'
