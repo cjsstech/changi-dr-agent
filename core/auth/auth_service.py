@@ -12,7 +12,7 @@ from core.web.app_tools import session, redirect, url_for, request, jsonify
 import config
 from core.web.lambda_request import LambdaRequest
 
-from services.file_store_service import S3Storage
+from services.file_store_service import FileStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ class AuthService:
     
     def __init__(self, storage_path: Optional[str] = None):
         self.storage_path = storage_path or getattr(config, 'USERS_STORAGE_PATH', 'storage/users.json')
-        self.storage = S3Storage()
+        self.storage = FileStorageService()
         self._ensure_default_user()
     
     def _ensure_default_user(self):

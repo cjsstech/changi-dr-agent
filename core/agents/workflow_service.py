@@ -7,7 +7,7 @@ import logging
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from services.file_store_service import S3Storage
+from services.file_store_service import FileStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +17,7 @@ class WorkflowService:
     
     def __init__(self, storage_path: Optional[str] = None):
         self.storage_path = storage_path or os.environ.get('WORKFLOWS_STORAGE_PATH', 'workflows.json')
-        self.storage = S3Storage()
+        self.storage = FileStorageService()
     
     def load_workflows(self) -> Dict[str, Dict]:
         """Load all workflows from storage"""

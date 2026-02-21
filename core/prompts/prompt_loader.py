@@ -1,6 +1,6 @@
 import os
 import logging
-from services.file_store_service import S3Storage
+from services.file_store_service import FileStorageService
 
 logger = logging.getLogger(__name__)
 
@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 PROMPTS_DIR = "prompts/"
 
 # Global storage instance
-_storage = S3Storage()
+_storage = FileStorageService()
 
 def load_prompt(prompt_file: str) -> str:
     """

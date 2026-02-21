@@ -3,32 +3,47 @@
 import os
 import logging
 from typing import List
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+CLOUD_ENV = os.environ.get("CLOUD_ENV", "false").lower() == "true"
 
-class S3Storage:
+
+class FileStorageService:
 
     def __init__(self):
 
-        try:
-            import boto3
-            self._boto3 = boto3
-        except ImportError:
-            # Allow tests to run without S3
-            self._boto3 = None
-            logger.warning("boto3 not installed - S3 disabled")
-
+        # ---------- Cloud (S3) ----------
         self.bucket = os.getenv("FILE_BUCKET")
         self.region = os.getenv("AWS_REGION")
 
+        self._boto3 = None
         self.s3 = None  # lazy client
 
+        # ---------- Local storage ----------
+        project_root = Path(__file__).resolve().parents[2]
+        self.local_root = project_root / "storage"
 
-    def _get_client(self):
+        if CLOUD_ENV:
+            try:
+                import boto3
+                self._boto3 = boto3
+            except ImportError:
+                raise RuntimeError("boto3 required in CLOUD_ENV")
+
+        else:
+            self.local_root.mkdir(parents=True, exist_ok=True)
+            logger.info(f"Using local storage at {self.local_root}")
+
+    # =========================================================
+    # Internal helpers
+    # =========================================================
+
+    def _get_s3_client(self):
 
         if not self._boto3:
-            raise RuntimeError("S3 not available (boto3 missing)")
+            raise RuntimeError("S3 not available")
 
         if self.s3:
             return self.s3
@@ -43,72 +58,119 @@ class S3Storage:
 
         return self.s3
 
+    def _local_path(self, key: str) -> Path:
+        return self.local_root / key
+
+    # =========================================================
+    # Public API
+    # =========================================================
 
     def list_files(self, prefix: str) -> List[str]:
 
-        s3 = self._get_client()
+        if CLOUD_ENV:
+            s3 = self._get_s3_client()
+            paginator = s3.get_paginator("list_objects_v2")
 
-        paginator = s3.get_paginator("list_objects_v2")
+            files = []
 
-        files = []
+            for page in paginator.paginate(
+                Bucket=self.bucket,
+                Prefix=prefix
+            ):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    if not key.endswith("/"):
+                        files.append(key)
 
-        for page in paginator.paginate(
-            Bucket=self.bucket,
-            Prefix=prefix
-        ):
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
+            return files
 
-                if not key.endswith("/"):
-                    files.append(key)
+        else:
+            base_path = self._local_path(prefix)
 
-        return files
+            if not base_path.exists():
+                return []
 
+            result = []
+
+            for path in base_path.rglob("*"):
+                if path.is_file():
+                    rel_path = path.relative_to(self.local_root)
+                    result.append(str(rel_path))
+
+            return result
+
+    # ---------------------------------------------------------
 
     def read(self, key: str) -> bytes:
 
-        s3 = self._get_client()
+        if CLOUD_ENV:
+            s3 = self._get_s3_client()
 
-        obj = s3.get_object(
-            Bucket=self.bucket,
-            Key=key
-        )
-
-        return obj["Body"].read()
-
-
-    def write(self, key: str, data: bytes):
-
-        s3 = self._get_client()
-
-        s3.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=data
-        )
-
-
-    def exists(self, key: str) -> bool:
-
-        try:
-            s3 = self._get_client()
-
-            s3.head_object(
+            obj = s3.get_object(
                 Bucket=self.bucket,
                 Key=key
             )
 
-            return True
+            return obj["Body"].read()
 
-        except Exception:
-            return False
+        else:
+            with open(self._local_path(key), "rb") as f:
+                return f.read()
 
+    # ---------------------------------------------------------
+
+    def write(self, key: str, data: bytes):
+
+        if CLOUD_ENV:
+            s3 = self._get_s3_client()
+
+            s3.put_object(
+                Bucket=self.bucket,
+                Key=key,
+                Body=data
+            )
+
+        else:
+            path = self._local_path(key)
+            path.parent.mkdir(parents=True, exist_ok=True)
+
+            with open(path, "wb") as f:
+                f.write(data)
+
+    # ---------------------------------------------------------
+
+    def exists(self, key: str) -> bool:
+
+        if CLOUD_ENV:
+            try:
+                s3 = self._get_s3_client()
+
+                s3.head_object(
+                    Bucket=self.bucket,
+                    Key=key
+                )
+                return True
+
+            except Exception:
+                return False
+
+        else:
+            return self._local_path(key).exists()
+
+    # ---------------------------------------------------------
 
     def delete(self, key: str):
 
-        s3 = self._get_client()
+        if CLOUD_ENV:
+            s3 = self._get_s3_client()
 
-        s3.delete_object(
-            Bucket=self.bucket,
-            Key=key
-        )
+            s3.delete_object(
+                Bucket=self.bucket,
+                Key=key
+            )
+
+        else:
+            path = self._local_path(key)
+
+            if path.exists():
+                path.unlink()
