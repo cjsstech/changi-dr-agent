@@ -24,7 +24,14 @@ def build_lambda_request(event) -> LambdaRequest:
     headers = event.get("headers") or {}
     method = event.get("httpMethod")
     path = event.get("path") or "/"
-    request_params = event.get("queryStringParameters") or {}
+    raw_params = event.get("queryStringParameters") or {}
+    # Normalize: API Gateway may send single value or list; use first value for compatibility
+    request_params = {}
+    for k, v in raw_params.items():
+        if isinstance(v, list):
+            request_params[k] = v[0] if v else ""
+        else:
+            request_params[k] = v
 
     # Extract API Gateway stage (e.g., "Prod")
     request_context = event.get("requestContext") or {}

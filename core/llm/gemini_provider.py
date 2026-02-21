@@ -66,10 +66,22 @@ class GeminiProvider:
             
             logger.info(f"[Gemini] Sending request with max_output_tokens={generation_config['max_output_tokens']}")
             
-            # Format tools for Gemini if provided
+            # Format tools for Gemini if provided.
+            # Gemini expects "parameters" (Schema); MCP/OpenAI often use "inputSchema" -> normalize.
             gemini_tools = None
             if tools:
-                gemini_tools = [{'function_declarations': tools}]
+                function_declarations = []
+                for t in tools:
+                    decl = {
+                        "name": t.get("name", ""),
+                        "description": t.get("description", "") or "",
+                    }
+                    # Use "parameters" if present, else "inputSchema" (MCP/OpenAI style)
+                    schema = t.get("parameters") or t.get("inputSchema")
+                    if schema:
+                        decl["parameters"] = schema
+                    function_declarations.append(decl)
+                gemini_tools = [{"function_declarations": function_declarations}]
                 logger.info(f"[Gemini] Passing tools to Gemini: {[t.get('name') for t in tools]}")
             
             response = self.client.generate_content(

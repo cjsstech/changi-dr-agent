@@ -103,13 +103,31 @@ def url_for(endpoint, **values):
         # Fallback: treat as literal path
         path = endpoint if endpoint.startswith("/") else f"/{endpoint}"
 
-    # Build query string from remaining values (excluding consumed ones)
-    query_params = {k: v for k, v in values.items()}
+    # Path parameters: agent_chat with agent_id → /agent/<agent_id>
+    if endpoint == "agent_chat" and "agent_id" in values:
+        v = dict(values)
+        agent_id = v.pop("agent_id")
+        path = f"/agent/{agent_id}"
+        return f"{_stage_prefix}{path}" if not v else f"{_stage_prefix}{path}?{__urlencode(v)}"
+
+    # workflow_chat with workflow_id → /workflow/<workflow_id>
+    if endpoint == "workflow_chat" and "workflow_id" in values:
+        v = dict(values)
+        workflow_id = v.pop("workflow_id")
+        path = f"/workflow/{workflow_id}"
+        return f"{_stage_prefix}{path}" if not v else f"{_stage_prefix}{path}?{__urlencode(v)}"
+
+    # Build query string from remaining values
+    query_params = dict(values)
     if query_params:
-        from urllib.parse import urlencode
-        return f"{_stage_prefix}{path}?{urlencode(query_params)}"
+        return f"{_stage_prefix}{path}?{__urlencode(query_params)}"
 
     return f"{_stage_prefix}{path}"
+
+
+def __urlencode(params):
+    from urllib.parse import urlencode
+    return urlencode(params)
 
 
 

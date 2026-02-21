@@ -9,7 +9,7 @@ import core.web.app_tools as app_tools # for session/request injection
 import os
 import mimetypes
 import base64
-
+from urllib.parse import unquote
 
 from http.cookies import SimpleCookie
 from services.session_service import SessionService
@@ -148,6 +148,14 @@ def _route_request(path, method, lm_request):
     if path == "/workflow" and method == "GET":
         return app.workflow_chat(lm_request)
 
+    # Handle /workflow/<workflow_id> (path-based)
+    if path.startswith("/workflow/") and method == "GET" and not path.startswith("/workflow/chat"):
+        workflow_id = path.split("/workflow/", 1)[1].split("/")[0]
+        if workflow_id:
+            lm_request.args = dict(lm_request.args) if lm_request.args else {}
+            lm_request.args["workflow_id"] = workflow_id
+            return app.workflow_chat(lm_request)
+
     if path == "/workflow/chat" and method == "POST":
         return app.workflow_chat_api(lm_request)
 
@@ -166,10 +174,12 @@ def _route_request(path, method, lm_request):
     if path == "/admin/agents":
         return app.admin_agents(lm_request)
 
-    # Handle /admin/agents/<agent_id> (frontend uses path param, backend expects query param)
+    # Handle /admin/agents/<agent_id> (path-based; backend expects agent_id in args)
     if path.startswith("/admin/agents/"):
-        agent_id = path.split("/")[-1]
+        parts = path[len("/admin/agents/"):].split("/")
+        agent_id = parts[0] if parts else None
         if agent_id:
+            lm_request.args = dict(lm_request.args) if lm_request.args else {}
             lm_request.args['agent_id'] = agent_id
             return app.admin_agent(lm_request)
 
@@ -179,6 +189,14 @@ def _route_request(path, method, lm_request):
     if path == "/admin/prompts":
         return app.admin_prompts(lm_request)
 
+    # Handle /admin/prompts/<filename> (path-based; backend expects file_name in args)
+    if path.startswith("/admin/prompts/") and method in ("GET", "PUT"):
+        filename = unquote(path[len("/admin/prompts/"):].split("?")[0])
+        if filename:
+            lm_request.args = dict(lm_request.args) if lm_request.args else {}
+            lm_request.args["file_name"] = filename
+            return app.admin_prompt(lm_request)
+
     if path == "/admin/prompt":
         return app.admin_prompt(lm_request)
 
@@ -187,6 +205,30 @@ def _route_request(path, method, lm_request):
 
     if path == "/admin/workflows":
         return app.admin_workflows(lm_request)
+
+    # Handle /admin/workflows/<workflow_id>/validate and /compile first (more specific)
+    if path.startswith("/admin/workflows/"):
+        rest = path[len("/admin/workflows/"):].strip("/")
+        if rest.endswith("validate"):
+            workflow_id = rest[:-len("validate")].rstrip("/")
+            if workflow_id:
+                lm_request.args = dict(lm_request.args) if lm_request.args else {}
+                lm_request.args["workflow_id"] = workflow_id
+                return app.validate_workflow(lm_request)
+        if rest.endswith("compile"):
+            workflow_id = rest[:-len("compile")].rstrip("/")
+            if workflow_id:
+                lm_request.args = dict(lm_request.args) if lm_request.args else {}
+                lm_request.args["workflow_id"] = workflow_id
+                return app.compile_workflow(lm_request)
+
+    # Handle /admin/workflows/<workflow_id> (path-based; GET, PUT, DELETE)
+    if path.startswith("/admin/workflows/"):
+        workflow_id = path[len("/admin/workflows/"):].split("/")[0]
+        if workflow_id:
+            lm_request.args = dict(lm_request.args) if lm_request.args else {}
+            lm_request.args["workflow_id"] = workflow_id
+            return app.admin_workflow(lm_request)
 
     if path == "/admin/workflow":
         return app.admin_workflow(lm_request)

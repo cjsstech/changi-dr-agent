@@ -21,23 +21,23 @@
             </div>
         </div>
 
-        <!-- Overview Cards -->
+        <!-- Overview Cards (click to switch to tab) -->
         <div class="overview-cards">
-            <div class="overview-card">
+            <div class="overview-card" onclick="switchTab('agents')" title="Go to Agents Tab" role="button" tabindex="0">
                 <div class="overview-icon">🤖</div>
                 <div class="overview-info">
                     <span class="overview-count" id="agentsCount">0</span>
                     <span class="overview-label">Agents</span>
                 </div>
             </div>
-            <div class="overview-card">
+            <div class="overview-card" onclick="switchTab('prompts')" title="Go to Prompts Tab" role="button" tabindex="0">
                 <div class="overview-icon">📝</div>
                 <div class="overview-info">
                     <span class="overview-count" id="promptsCount">0</span>
                     <span class="overview-label">Prompts</span>
                 </div>
             </div>
-            <div class="overview-card">
+            <div class="overview-card" onclick="switchTab('mcp')" title="Go to MCP Tools Tab" role="button" tabindex="0">
                 <div class="overview-icon">🔧</div>
                 <div class="overview-info">
                     <span class="overview-count" id="toolsCount">0</span>

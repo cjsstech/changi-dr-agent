@@ -22,7 +22,7 @@ class FileStorageService:
         self.s3 = None  # lazy client
 
         # ---------- Local storage ----------
-        project_root = Path(__file__).resolve().parents[2]
+        project_root = Path(__file__).resolve().parents[1]
         self.local_root = project_root / "storage"
 
         if CLOUD_ENV:
