@@ -1280,7 +1280,6 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         
         return articles
 
-    @staticmethod
     def _adjust_itinerary_by_arrival_time(self, itinerary_html: str, arrival_time: str) -> str:
         """Adjust Day 1 itinerary based on arrival time"""
         import re
@@ -1882,14 +1881,14 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
         logger.info(f"[Agent Executor] ✅ [Travel Content MCP] Enhancement complete: {enhanced_count} enhanced, {skipped_count} skipped, {error_count} errors")
         return enhanced_html
 
-    @staticmethod
+    
     def _extract_and_add_time_blocks(self, html_text: str, destination: Optional[str]) -> str:
         """Extract time blocks from HTML that has day cards but missing time blocks"""
         import re
         logger.warning(f"[Agent Executor] HTML structure found but time blocks missing - cannot auto-extract")
         return html_text
 
-    @staticmethod
+    
     def _create_summary_card(self, destination: Optional[str], duration: Optional[str], pace: Optional[str]) -> str:
         """Create a summary card HTML for the chat"""
         dest_display = destination or 'Your Destination'
