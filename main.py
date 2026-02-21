@@ -1,4 +1,8 @@
 # controller.py
+from dotenv import load_dotenv
+load_dotenv()
+
+import config
 import json
 import logging
 from fastapi import FastAPI, Request, Response

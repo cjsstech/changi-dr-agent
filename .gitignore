@@ -30,12 +30,11 @@ env/
 .env/
 
 # Environment variables - IMPORTANT: Never commit API keys!
-.env
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
-*.env
+
 
 # IDE and editors
 .vscode/
