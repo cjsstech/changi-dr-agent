@@ -543,37 +543,117 @@ function loadMCPTools() {
 }
 
 function displayMCPTools(tools) {
+    console.log(tools);
     const toolsList = document.getElementById('mcpToolsList');
-
-    toolsList.innerHTML = tools.map(tool => `
-        <div class="mcp-tool-card ${tool.enabled ? 'enabled' : 'disabled'}">
+    const toolGroups = groupMCPTools(tools);
+    toolsList.innerHTML = toolGroups.map(tool_group => `
+        <div class="mcp-tool-card ${tool_group.enabled ? 'enabled' : 'disabled'}">
             <div class="mcp-tool-header">
-                <span class="mcp-tool-icon">${getToolIcon(tool.id)}</span>
-                <h3>${escapeHtml(tool.name)}</h3>
-                <span class="mcp-tool-status ${tool.enabled ? 'status-enabled' : 'status-disabled'}">
-                    ${tool.enabled ? '✓ Enabled' : '✗ Disabled'}
+                <span class="mcp-tool-icon">${getToolGroupIcon(tool_group.group_id)}</span>
+
+                <h3>${getToolGroupName(tool_group.group_id)}</h3>
+                <span class="mcp-tool-status ${tool_group.enabled ? 'status-enabled' : 'status-disabled'}">
+                    ${tool_group.enabled ? '✓ Enabled' : '✗ Disabled'}
                 </span>
             </div>
-            <p class="mcp-tool-description">${escapeHtml(tool.description)}</p>
-            ${tool.endpoint_base ? `<div class="mcp-tool-endpoint"><code>${escapeHtml(tool.endpoint_base)}</code></div>` : ''}
-            <div class="mcp-tool-id">ID: <code>${escapeHtml(tool.id)}</code></div>
-        </div>
+
+            <p class="mcp-tool-description">${getToolGroupDesc(tool_group.group_id)}</p>
+
+            <div class="mcp-tool-id">
+                <div class="mcp-tool-id-label">Tools:</div>
+                <div class="mcp-tool-id-list">
+                    ${tool_group.tool_names.map(t => `<code>${escapeHtml(t)}</code><br>`).join('')}
+                </div>
+                </div>
+            </div>
     `).join('');
 }
 
-function getToolIcon(toolId) {
+function getToolGroupIcon(tool_group) {
     const icons = {
-        'flight_api': '✈️',
+        'flights': '✈️',
         'travel_content': '🌍',
         'nowboarding': '📰',
         'maps': '🗺️',
+        'visa': '🛂',
         'browser': '🌐',
         'filesystem': '📁',
         'database': '💾'
     };
-    return icons[toolId] || '🔧';
+    return icons[tool_group] || '🔧';
 }
 
+function getToolGroupDesc(tool_group) {
+    const descriptions = {
+        'flights': 'Search and format flights from Changi Airport API',
+        'travel_content': 'Generate booking links and guide pages for Lonely Planet and Trip.com',
+        'nowboarding': 'The ONLY source for travel articles, stories, blogs, and reading material.',
+        'maps': 'Geocode locations and generate map URLs',
+        'visa': 'Visa requirements and visa information',
+        'browser': 'Web navigation, screenshots, and page interaction',
+        'filesystem': 'Read and write files',
+        'database': 'Query databases'
+    };
+    return descriptions[tool_group] || 'No description available';
+}
+
+function getToolGroupName(tool_group) {
+    const names = {
+        'flights': 'Flights',
+        'travel_content': 'Travel Content',
+        'nowboarding': 'Now Boarding Articles',
+        'maps': 'Maps & Geocoding',
+        'visa': 'Visa Requirements',
+        'browser': 'Browser',
+        'filesystem': 'File System',
+        'database': 'Database'
+    };
+    return names[tool_group] || 'Unknown';
+}
+
+const UPCOMING_TOOL_GROUPS = {
+    browser: {
+        group_id: "browser",
+        name: "Browser",
+        description: "Web navigation, screenshots, and page interaction",
+        enabled: false,
+        tool_names: []
+    },
+    filesystem: {
+        group_id: "filesystem",
+        name: "File System",
+        description: "Read and write files",
+        enabled: false,
+        tool_names: []
+    },
+    database: {
+        group_id: "database",
+        name: "Database",
+        description: "Query databases",
+        enabled: false,
+        tool_names: []
+    }
+};
+function groupMCPTools(tools) {
+    const groups = {};
+    tools.forEach(tool => {
+        const [groupId, subName] = tool.name.split('.', 2);
+        if (!groups[groupId]) {
+            groups[groupId] = {
+                group_id: groupId,
+                enabled: true,   // group exists → enabled
+                tool_names: []
+            };
+        }
+        groups[groupId].tool_names.push(tool.name);
+    });
+    Object.values(UPCOMING_TOOL_GROUPS).forEach(upcomingGroup => {
+        if (!groups[upcomingGroup.group_id]) {
+            groups[upcomingGroup.group_id] = { ...upcomingGroup };
+        }
+    });
+    return Object.values(groups);
+}
 // Initialize prompt form handler after DOM loaded
 document.addEventListener('DOMContentLoaded', function () {
     setupPromptFormHandler();
