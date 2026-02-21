@@ -531,7 +531,7 @@ function loadMCPTools() {
         .then(data => {
             if (data.success) {
                 displayMCPTools(data.tools);
-                const enabledCount = data.tools.filter(t => t.enabled).length;
+                const enabledCount = groupMCPTools(data.tools).filter(t => t.enabled).length;
                 document.getElementById('toolsCount').textContent = enabledCount;
             } else {
                 console.error('Error loading MCP tools:', data.error);
