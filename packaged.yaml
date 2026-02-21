@@ -1,0 +1,142 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: "Changi Destination Recommender \u2013 POC (Lambda-only)"
+Parameters:
+  OpenAIKey:
+    Type: String
+    Description: OpenAI API Key
+    NoEcho: true
+    Default: ''
+  AgentFunctionName:
+    Type: String
+    Description: Lambda function name for Agent handler
+  GeminiKey:
+    Type: String
+    Description: Gemini API Key
+    NoEcho: true
+  ChangiApiKey:
+    Type: String
+    Description: Changi Airport API Key
+    NoEcho: true
+    Default: ''
+  FileBucketName:
+    Type: String
+    Description: S3 Bucket for application data (users, workflows, prompts)
+  SessionTTL:
+    Type: Number
+    Description: Session TTL in seconds
+    Default: 3600
+  McpApiUrl:
+    Type: String
+    Description: MCP API Gateway URL
+  McpApiKey:
+    Type: String
+    Description: MCP API Gateway API Key
+    NoEcho: true
+Globals:
+  Function:
+    Environment:
+      Variables:
+        OPENAI_API_KEY:
+          Ref: OpenAIKey
+        GEMINI_API_KEY:
+          Ref: GeminiKey
+        CHANGI_API_KEY:
+          Ref: ChangiApiKey
+        FILE_BUCKET:
+          Ref: FileBucketName
+        SESSION_TTL_SECONDS:
+          Ref: SessionTTL
+        AGENTS_STORAGE_PATH: agents.json
+        USERS_STORAGE_PATH: users.json
+        WORKFLOWS_STORAGE_PATH: workflows.json
+        DYNAMODB_TABLE:
+          Ref: SessionsTable
+        MCP_SERVER_URL: http://host.docker.internal:8001
+        MCP_API_URL:
+          Ref: McpApiUrl
+        MCP_API_KEY:
+          Ref: McpApiKey
+  Api:
+    Cors:
+      AllowOrigin: '''*'''
+      AllowHeaders: '''Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'''
+      AllowMethods: '''GET,POST,PUT,DELETE,OPTIONS'''
+Resources:
+  ChangiDrChatLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AgentFunctionName}-chat-${AWS::StackName}-${AWS::Region}-${AWS::AccountId}
+      CodeUri: s3://agent-dr-artifacts/agent-dr.zip
+      Handler: handlers/chat_handler.process
+      Runtime: python3.12
+      Architectures:
+      - arm64
+      Timeout: 60
+      MemorySize: 1024
+      Events:
+        ChatApi:
+          Type: Api
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+        RootApi:
+          Type: Api
+          Properties:
+            Path: /
+            Method: ANY
+    Metadata:
+      SamResourceId: ChangiDrChatLambda
+  ChangiDrMCPLambda:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: ${AgentFunctionName}-mcp-${AWS::StackName}-${AWS::Region}-${AWS::AccountId}
+      CodeUri: s3://agent-dr-artifacts/agent-dr.zip
+      Handler: handlers/mcp_handler.process
+      Runtime: python3.12
+      Architectures:
+      - arm64
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          OPENAI_API_KEY:
+            Ref: OpenAIKey
+          GEMINI_API_KEY:
+            Ref: GeminiKey
+          CHANGI_API_KEY:
+            Ref: ChangiApiKey
+          FILE_BUCKET:
+            Ref: FileBucketName
+          SESSION_TTL_SECONDS:
+            Ref: SessionTTL
+          MCP_SERVER_URL: http://host.docker.internal:8001
+      Events:
+        MCPApi:
+          Type: Api
+          Properties:
+            Path: /mcp/{proxy+}
+            Method: ANY
+    Metadata:
+      SamResourceId: ChangiDrMCPLambda
+  SessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName:
+        Fn::Sub: sessions-${AWS::StackName}
+      AttributeDefinitions:
+      - AttributeName: session_id
+        AttributeType: S
+      KeySchema:
+      - AttributeName: session_id
+        KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
+    Metadata:
+      SamResourceId: SessionsTable
+Outputs:
+  ApiUrl:
+    Description: API Gateway base URL
+    Value:
+      Fn::Sub: https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/
