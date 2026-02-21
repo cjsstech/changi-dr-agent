@@ -370,11 +370,14 @@ def _extract_arrival_time(flight_data):
 def admin(request=None):
     """Agent management UI"""
     agents = agent_service.list_agents()
-    available_tools = [{'id': tid, **tinfo} for tid, tinfo in mcp_manager.tools.items() if tinfo.get('enabled', False)]
+    mcp_tools = list(mcp_manager.tools.values())
     available_prompts = list_available_prompts()
-    return render_template('admin.html', agents=agents, available_tools=available_tools,
-                           available_prompts=available_prompts)
-
+    return render_template(
+        'admin.html',
+        agents=agents,
+        mcp_tools_json=json.dumps(mcp_tools),
+        available_prompts=available_prompts
+    )
 
 #TODO: Remove this line once Unit Testing done. This decorator not needed as Lambda handler will handles Routing @app.route('/admin/agents', methods=['GET', 'POST'])
 @auth_service.require_auth

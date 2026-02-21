@@ -542,6 +542,19 @@ function loadMCPTools() {
         });
 }
 
+function renderMCPToolGroups(tools) {
+    const container = document.getElementById('mcp_tools_list');
+    const groups = groupMCPTools(tools);
+    const enabledGroups = groups.filter(g => g.enabled);
+    container.innerHTML = enabledGroups.map(g => `
+        <label class="checkbox-label">
+            <input type="checkbox" name="mcp_tools" value="${g.group_id}">
+            <span>${getToolGroupName(g.group_id)}</span>
+            <small>${getToolGroupDesc(g.group_id)}</small>
+        </label>
+    `).join('');
+}
+
 function displayMCPTools(tools) {
     console.log(tools);
     const toolsList = document.getElementById('mcpToolsList');
@@ -658,6 +671,8 @@ function groupMCPTools(tools) {
 document.addEventListener('DOMContentLoaded', function () {
     setupPromptFormHandler();
 });
+
+document.addEventListener("DOMContentLoaded", () => { renderMCPToolGroups(mcpTools); });
 
 // ============================================================================
 // Workflows Management

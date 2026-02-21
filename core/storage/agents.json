@@ -6,7 +6,7 @@
     "llm_provider": "gemini",
     "llm_model": "gemini-2.5-flash",
     "mcp_tools": [
-      "flight_api",
+      "flights",
       "travel_content",
       "maps"
     ],
@@ -22,7 +22,7 @@
     "llm_provider": "gemini",
     "llm_model": "gemini-2.5-flash",
     "mcp_tools": [
-      "flight_api",
+      "flights",
       "travel_content",
       "nowboarding",
       "maps"
