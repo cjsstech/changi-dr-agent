@@ -6,7 +6,7 @@ let currentTripData = null;
 // MCP Server URL for visa checking
 // MCP_SERVER_URL is injected from index.html
 // define a local variable to avoid conflict with global const if script.js is loaded after
-const mcpApiUrl = (typeof MCP_SERVER_URL !== 'undefined') ? MCP_SERVER_URL : 'http://localhost:8001';
+const mcpApiUrl = (typeof MCP_SERVER_URL !== 'undefined') ? MCP_SERVER_URL : 'http://localhost:8002/mcp';
 const apiBase = (typeof API_BASE !== 'undefined') ? API_BASE : '';
 
 // Store current destination for visa check
@@ -357,12 +357,20 @@ async function checkVisaRequirements() {
     checkBtn.disabled = true;
 
     try {
-        const response = await fetch(`${mcpApiUrl}/visa/requirements`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+        const response = await fetch(mcpApiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                nationality: nationality,
-                destination: destination
+                jsonrpc: "2.0",
+                id: crypto.randomUUID(),
+                method: "tools/call",
+                params: {
+                    name: "visa.requirements",
+                    arguments: {
+                        nationality: nationality,
+                        destination: destination
+                    }
+                }
             })
         });
 
