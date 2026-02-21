@@ -4,15 +4,15 @@ version = 0.1
 confirm_changeset = false
 
 [default.deploy.parameters]
-stack_name = "cjss-dr"
+stack_name = "agent-cag-dr"
 capabilities = "CAPABILITY_NAMED_IAM"
 
 # Manual bucket for SAM artifacts
-s3_bucket = "cjss-dr-artifacts"
+s3_bucket = "agent-dr-artifacts"
 
-s3_prefix = "cjss-dr"
+s3_prefix = "agent-dr"
 disable_rollback = false
-parameter_overrides = "AgentFunctionName=changi-dr-chat OpenAIKey=YOUR_OPENAI_KEY_____ GeminiKey=AIzaSyB99N9SoAtMvPoO4XNYOrWmBITZ-5EN0ks ChangiApiKey=da2-rkyh2gb2kvft3oco3l6eaqmlb4 FileBucketName=cjss-dr-artifacts SessionTTL=3600 McpApiUrl=https://ihrl2tdv65.execute-api.ap-south-1.amazonaws.com/Prod/mcp/ McpApiKey=fnSwS521Wh241LmdWwMMZPwYNlKSt0saH86ROqo1"
+parameter_overrides = "AgentFunctionName=changi-dr-chat OpenAIKey=YOUR_OPENAI_KEY_____ GeminiKey=AIzaSyAfwkHExMvRvRcrGwqE6NNATfXYddJ7yyI ChangiApiKey=da2-rkyh2gb2kvft3oco3l6eaqmlb4 FileBucketName=cjss-dr-artifacts SessionTTL=3600 McpApiUrl=https://idi69ry806.execute-api.ap-south-1.amazonaws.com/Prod/mcp/ McpApiKey=2LjWlsgXIt2FwmXKD5gqnarEScs4OFRCagzSIbay"
 
 
 image_repositories = []
