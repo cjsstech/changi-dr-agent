@@ -53,7 +53,7 @@ Globals:
         USERS_STORAGE_PATH: "users.json"
         WORKFLOWS_STORAGE_PATH: "workflows.json"
         DYNAMODB_TABLE: !Ref SessionsTable
-        MCP_SERVER_URL: "http://host.docker.internal:8001"
+        MCP_SERVER_URL: "https://0eiosej87i.execute-api.ap-south-1.amazonaws.com/Prod/mcp/"
         MCP_API_URL: !Ref McpApiUrl
         MCP_API_KEY: !Ref McpApiKey
         CLOUD_ENV: "true"
@@ -100,30 +100,7 @@ Resources:
             Path: /
             Method: ANY
 
-  # Lambda: MCP
-  ChangiDrMCPLambda:
-    Type: AWS::Serverless::Function
-    Properties:
-      FunctionName: !Sub "${AgentFunctionName}-mcp-${AWS::StackName}-${AWS::Region}-${AWS::AccountId}"
-      CodeUri: s3://agent-dr-artifacts/agent-dr.zip
-      Handler: handlers/mcp_handler.process
-      Runtime: python3.12
-      Architectures:
-        - x86_64
-      Timeout: 60
-      MemorySize: 1024
-      Policies:
-        - S3CrudPolicy:
-            BucketName: !Ref FileBucketName
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SessionsTable
 
-      Events:
-        MCPApi:
-          Type: Api
-          Properties:
-            Path: /mcp/{proxy+}
-            Method: ANY
 
   # DynamoDB Table
   SessionsTable:
