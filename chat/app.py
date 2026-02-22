@@ -563,6 +563,11 @@ def admin_mcp_tools(request=None):
 
 
     tools = []
+    
+    # Refresh if tools are empty (to handle cold starts or connection issues)
+    if not mcp_manager.tools:
+        mcp_manager.refresh()
+        
     for tool_id, tool_info in mcp_manager.tools.items():
         tools.append({
             'id': tool_id,

@@ -203,18 +203,21 @@ class AgentExecutor:
                 # Only require: destination, duration, and travel dates (removed holiday_type requirement)
                 # CRITICAL: Properly validate travel_dates - must be non-empty string or non-empty list
                 travel_date_valid = False
+                current_destination = session_context.get('destination') or destination
+                current_duration = session_context.get('duration')
+                
                 if session_context.get('travel_date'):
-                    # Single date exists
                     travel_date_valid = True
                 elif session_context.get('travel_dates'):
-                    # Check if travel_dates is a non-empty list with actual dates
                     travel_dates_list = session_context.get('travel_dates')
                     if isinstance(travel_dates_list, list) and len(travel_dates_list) > 0 and all(d for d in travel_dates_list):
                         travel_date_valid = True
+                elif session_context.get('primary_departure_date'):
+                    travel_date_valid = True
                 
                 has_all_required_info = bool(
-                    session_context.get('destination') and
-                    session_context.get('duration') and
+                    current_destination and
+                    current_duration and
                     travel_date_valid
                 )
                 
@@ -369,7 +372,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             response_data = self.llm_client.chat_completion(
                 messages=messages,
                 temperature=0.7,
-                max_tokens=2000,
+                max_tokens=4096,
                 tools=llm_tools
             )
             
@@ -435,13 +438,16 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                             
                             # Store context if needed (flight search)
                             if mcp_tool_name == 'flights.search':
-                                if result.get('success'):
                                     session_context['selected_flights'] = result.get('flights', [])
                                     session_context['destination'] = mcp_tool_args.get('destination')
                                     # Normalize dates
                                     dates_arg = mcp_tool_args.get('scheduled_dates', [])
                                     if isinstance(dates_arg, str): dates_arg = [dates_arg]
                                     session_context['primary_departure_date'] = dates_arg[0] if dates_arg else None
+                                    
+                                    # Set force_itinerary_generation flag to True after flight search success
+                                    session_context['force_itinerary_generation'] = True
+                                    logger.info(f"[Agent Executor] ✅ Set force_itinerary_generation=True after flight search")
 
                             # Store articles if fetched (for use in non-itinerary responses)
                             elif mcp_tool_name == 'nowboarding.fetch_articles':
@@ -476,7 +482,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     response_data = self.llm_client.chat_completion(
                         messages=messages,
                         temperature=0.7,
-                        max_tokens=2000,
+                        max_tokens=4096,
                         tools=llm_tools
                     )
                     
@@ -578,21 +584,56 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             #     ... (logic removed) ...
             #     has_itinerary_content = False
             
+            # --- ITINERARY DETECTION & METADATA EXTRACTION ---
+            # Retrieve destination from session context (set by flight search tool)
+            # destination_from_context = session_context.get('destination') or destination
+            # duration_from_context = session_context.get('duration')
+            
+            # Extract metadata for summary card and flight formatting
+            metadata_destination = session_context.get('destination') or self._extract_destination(user_message, response_text) or "your destination"
+            metadata_duration = session_context.get('duration') or self._extract_duration(user_message, response_text) or "Trip"
+            metadata_pace = self._extract_pace(user_message, response_text) or "Relaxed"
+            
+            # Handle dates
+            metadata_departure_date = session_context.get('primary_departure_date') or session_context.get('travel_date') or "Upcoming"
+            
+            # 1. Generate Flight Options HTML if flights were found
+            selected_flights = session_context.get('selected_flights', [])
+            flight_options_html = ""
+            if selected_flights:
+                logger.info(f"[Agent Executor] Adding {len(selected_flights)} flight options for UI display")
+                try:
+                    from changi_flight_service import format_flight_options_for_itinerary
+                    flight_options_html = format_flight_options_for_itinerary(
+                        selected_flights,
+                        metadata_destination,
+                        metadata_departure_date,
+                        metadata_duration
+                    )
+                except Exception as e:
+                    logger.error(f"[Agent Executor] Error formatting standalone flight options: {e}")
+            
+            # 2. Fetch Now Boarding articles if not already present
+            articles = session_context.get('recent_articles', [])
+            if not articles and metadata_destination:
+                try:
+                    # Clean destination for API calls
+                    clean_dest = re.sub(r'^(go to|i\'d like to go to|going to|let\'s go to)\s+', '', metadata_destination, flags=re.IGNORECASE).strip().title()
+                    articles = self._fetch_nowboarding_articles(clean_dest, limit=3)
+                except Exception as e:
+                    logger.error(f"[Agent Executor] Error fetching articles: {e}")
+
             # If it's a travel agent and response contains itinerary, format it for display
             # Only proceed if we have all required information (destination, duration, travel_date)
             logger.info(f"[Agent Executor] Checking itinerary conditions: is_travel_agent={is_travel_agent}, has_itinerary_content={has_itinerary_content}, has_destination={has_destination}, has_duration={has_duration}, has_travel_date={has_travel_date}")
             if is_travel_agent and has_itinerary_content:
                 logger.info(f"[Agent Executor] ✅ ITINERARY DETECTED - Processing for display")
-                # Extract metadata for summary card (optional, not for validation)
-                # These are just for display purposes in the UI
-                # Retrieve destination from session context (set by flight search tool)
-                destination = session_context.get('destination') or self._extract_destination(user_message, response_text) or "your destination"
-                duration = self._extract_duration(user_message, response_text) or "Trip"
-                pace = self._extract_pace(user_message, response_text) or "Relaxed"
                 
-                # Get flights if available
-                selected_flights = session_context.get('selected_flights', [])
-                primary_departure_date = session_context.get('primary_departure_date') or session_context.get('travel_date') or "Upcoming"
+                # Use the common metadata
+                destination = metadata_destination
+                duration = metadata_duration
+                pace = metadata_pace
+                primary_departure_date = metadata_departure_date
                 
                 # Get arrival time from first flight if available
                 arrival_time = None
@@ -634,67 +675,12 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     # Adjust Day 1 based on arrival time even if already in HTML
                     response_text = self._adjust_itinerary_by_arrival_time(response_text, arrival_time)
                 
-                # Prepend flight options to itinerary if flights are available
-                if selected_flights and primary_departure_date:
-                    logger.info(f"[Agent Executor] Adding {len(selected_flights)} flight options to itinerary")
-                    logger.info(f"[Agent Executor] Primary departure date: {primary_departure_date}, Duration: {duration}")
-                    try:
-                        # Use MCP tool to format flight options, with fallback if it fails
-                        flight_options_html = ''
-                        if mcp_manager.is_tool_enabled('flights.format') and destination: #previously tool_name is flight_api
-                            try:
-                                format_result = mcp_manager.call_tool(
-                                    tool_name='flights.format',
-                                    arguments={
-                                        'flights': selected_flights,
-                                        'destination': destination,
-                                        'departure_date': primary_departure_date,
-                                        'duration': duration
-                                    }
-                                )
-                                if format_result.get('success'):
-                                    flight_options_html = format_result.get('html', '')
-                                else:
-                                    logger.warning(f"[Agent Executor] MCP flight format failed: {format_result.get('error')}, falling back to direct call")
-                                    # Fallback to direct import if MCP fails
-                                    from changi_flight_service import format_flight_options_for_itinerary
-                                    flight_options_html = format_flight_options_for_itinerary(
-                                        selected_flights,
-                                        destination,
-                                        primary_departure_date,
-                                        duration
-                                    )
-                            except Exception as e:
-                                logger.warning(f"[Agent Executor] MCP flight format error: {e}, falling back to direct call")
-                                # Fallback to direct import if MCP fails
-                                from changi_flight_service import format_flight_options_for_itinerary
-                                flight_options_html = format_flight_options_for_itinerary(
-                                    selected_flights,
-                                    destination,
-                                    primary_departure_date,
-                                    duration
-                                )
-                        else:
-                            # Direct import if MCP not enabled
-                            from changi_flight_service import format_flight_options_for_itinerary
-                            flight_options_html = format_flight_options_for_itinerary(
-                                selected_flights,
-                                destination,
-                                primary_departure_date,
-                                duration
-                            )
-                        # DON'T prepend to response_text - store separately for frontend to render in correct position
-                        # response_text = flight_options_html + response_text  # OLD - flights at top
-                        # NEW - flights will be rendered by frontend after Now Boarding
-                        logger.info(f"[Agent Executor] ✅ Generated flight options HTML (length: {len(flight_options_html)}) - will be rendered by frontend")
-                    except Exception as e:
-                        logger.error(f"[Agent Executor] Error formatting flight options: {e}")
-                        import traceback
-                        logger.error(f"[Agent Executor] Traceback: {traceback.format_exc()}")
-                        flight_options_html = ''
-                else:
-                    logger.warning(f"[Agent Executor] ⚠️ No flights to add: selected_flights={len(selected_flights) if selected_flights else 0}, primary_departure_date={primary_departure_date}")
-                    flight_options_html = ''
+                # Flight options already generated above as flight_options_html
+                # We can just log success here if they were found
+                if flight_options_html:
+                    logger.info(f"[Agent Executor] ✅ Consistent flight options HTML available (length: {len(flight_options_html)})")
+                
+                # No changes needed to response_text here, it's already processed or will be enhanced below
                 
                 # Enhance itinerary with MCP-generated travel content links
                 travel_content_enabled = mcp_manager.is_tool_enabled('travel_content.links') #previously tool_name is travel_content
@@ -738,36 +724,9 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                     # Direct method if MCP not enabled
                     locations = self._extract_locations_from_itinerary(response_text, destination)
                 
-                # Fetch Now Boarding articles using MCP tool (only if enabled), with fallback to direct method
-                articles = []
-                # Clean destination for API calls - remove "go to" prefix if present
-                clean_destination = destination
-                if destination:
-                    clean_destination = re.sub(r'^(go to|i\'d like to go to|going to|let\'s go to)\s+', '', destination, flags=re.IGNORECASE).strip()
-                    # Capitalize first letter of each word
-                    clean_destination = clean_destination.title()
-                
-                if mcp_manager.is_tool_enabled('nowboarding.fetch_articles') and clean_destination: #previously tool_name is nowboarding
-                    try:
-                        articles_result = mcp_manager.call_tool(
-                            tool_name='nowboarding.fetch_articles',
-                            arguments={
-                                'destination': clean_destination,
-                                'limit': 3
-                            }
-                        )
-                        if articles_result.get('success'):
-                            articles = articles_result.get('articles', [])
-                        else:
-                            logger.warning(f"[Agent Executor] MCP Now Boarding fetch failed: {articles_result.get('error')}, falling back to direct method")
-                            articles = self._fetch_nowboarding_articles(clean_destination, limit=3)
-                    except Exception as e:
-                        logger.warning(f"[Agent Executor] MCP Now Boarding fetch error: {e}, falling back to direct method")
-                        articles = self._fetch_nowboarding_articles(clean_destination, limit=3)
-                else:
-                    # MCP not enabled - use direct method instead of skipping
-                    logger.info("[Agent Executor] Now Boarding MCP tool not enabled, using direct method")
-                    articles = self._fetch_nowboarding_articles(clean_destination, limit=3)
+                # Fetch Now Boarding articles - already handled in the shared block above
+                # Use clean_destination for API call results if needed for logging
+                clean_destination = destination.title()
                 
                 # Create summary card for chat
                 summary_card = self._create_summary_card(destination, duration, pace)
@@ -890,14 +849,22 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
                 'response': response_text,
                 'success': True,
                 'agent_id': self.agent_id,
-                'agent_name': self.get_agent_name()
+                'agent_name': self.get_agent_name(),
+                'destination': metadata_destination,
+                'duration': metadata_duration,
+                'departure_date': metadata_departure_date
             }
             
-            # If the agent just fetched articles, display them even without an itinerary
-            recent_articles = session_context.get('recent_articles')
-            if recent_articles:
-                response_dict['articles'] = recent_articles
+            # If the agent just fetched flights or articles, display them even without an itinerary
+            if articles:
+                response_dict['articles'] = articles
                 response_dict['show_panel'] = True
+                
+            if flight_options_html:
+                response_dict['flight_options_html'] = flight_options_html
+                response_dict['show_panel'] = True
+                response_dict['flights'] = selected_flights
+                logger.info(f"[Agent Executor] Added flight_options_html to default response (length: {len(flight_options_html)})")
                 
             return response_dict
             

@@ -42,7 +42,7 @@ function openItineraryPanel() {
         if (resultsContent) {
             resultsContent.innerHTML = `
                 <div class="itinerary-panel-content">
-                    ${currentItinerary}
+                    ${currentItinerary || ''}
                     ${visaSection}
                     ${articlesSection}
                     ${flightOptionsHtml}
@@ -668,9 +668,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 addMessage(data.response, 'bot');
 
                 // Store full itinerary if provided
-                if (data.full_itinerary) {
-                    console.log('[Frontend] Received full itinerary, length:', data.full_itinerary.length);
-                    currentItinerary = data.full_itinerary;
+                if (data.full_itinerary || data.flight_options_html) {
+                    currentItinerary = data.full_itinerary || '';
                     currentTripData = {
                         destination: data.destination,
                         duration: data.duration,
@@ -681,11 +680,10 @@ document.addEventListener('DOMContentLoaded', function () {
                         departure_date: data.departure_date
                     };
 
-                    // Panel will open when user clicks "View complete Itinerary" button
-                    // Auto-open disabled - user controls when to view the panel
-                    console.log('[Frontend] Itinerary ready - waiting for user to click View complete Itinerary');
+                    // Automatically open the panel to show flights/itinerary
+                    openItineraryPanel();
                 } else {
-                    console.log('[Frontend] No full_itinerary in response');
+                    console.log('[Frontend] No itinerary or flights in response');
                 }
             } else {
                 addMessage('I had trouble with that. Could you try rephrasing? 🤔', 'bot');

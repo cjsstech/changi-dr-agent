@@ -18,11 +18,15 @@ class McpManager:
         self.resources = {}
 
         # Try to load from MCP Lambda (overrides static tools if successful)
+        self.refresh()
+
+    def refresh(self):
+        """Refresh the tool registry from the MCP server"""
         try:
             self.initialize()
             self._load_registry()
         except Exception as e:
-            print(f"[MCP] Warning: Could not initialize MCP manager: {e}")
+            print(f"[MCP] Warning: Could not refresh MCP manager: {e}")
 
     # Internal HTTP Invoke (API Gateway)
     def _invoke(self, method: str, params: dict | None = None):
@@ -66,7 +70,6 @@ class McpManager:
         self.tools = {
             t["name"]: t
             for t in tools_data.get("tools", [])
-            if t.get("enabled", True)
         }
 
         self.prompts = {

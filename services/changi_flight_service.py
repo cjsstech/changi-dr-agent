@@ -721,6 +721,8 @@ def format_flight_options_for_itinerary(flights, destination, departure_date, du
     for idx, flight in enumerate(flights[:3], 1):  # Top 3 flights
         flight_number = flight.get("flight_number", "N/A")
         terminal = flight.get("terminal", "N/A")
+        check_in_row = flight.get("check_in_row")
+        slave_flights = flight.get("slave_flights", [])
         
         # Airport details
         airport_info = flight.get("airport_details", {})
@@ -766,6 +768,9 @@ def format_flight_options_for_itinerary(flights, destination, departure_date, du
             trip_type='rt'
         )
         
+        # Codeshare info
+        codeshare_html = f'<div class="flight-codeshare">Codeshare: {", ".join(slave_flights)}</div>' if slave_flights else ''
+        
         # Flight card HTML with CSS classes for proper styling
         html += f'''
         <div class="flight-option-card">
@@ -777,8 +782,9 @@ def format_flight_options_for_itinerary(flights, destination, departure_date, du
                         {f'<span class="flight-airline-name">{airline_name}</span>' if airline_name else ''}
                     </div>
                     <div class="flight-option-route">Singapore → {city}{via_text}</div>
+                    {codeshare_html}
                 </div>
-                <div class="flight-status-badge" style="background: {"#4caf50" if "On Time" in status else "#ff9800"};">{status}</div>
+                <div class="flight-status-badge" style="background: {"#4caf50" if "On Time" in status or "Scheduled" in status else "#ff9800"};">{status}</div>
             </div>
             <div class="flight-option-details">
                 <div class="flight-detail-row">
@@ -787,11 +793,11 @@ def format_flight_options_for_itinerary(flights, destination, departure_date, du
                 </div>
                 <div class="flight-detail-row">
                     <span class="flight-detail-label">🛫 <strong>Terminal</strong></span>
-                    <span class="flight-detail-value">T{terminal}</span>
+                    <span class="flight-detail-value">Terminal {terminal} {f"(Row {check_in_row})" if check_in_row else ""}</span>
                 </div>
                 <div class="flight-detail-row">
                     <span class="flight-detail-label">🚪 <strong>Gate</strong></span>
-                    <span class="flight-detail-value">{gate if gate != "-" else "None"}</span>
+                    <span class="flight-detail-value">{gate if gate != "-" else "Wait for Info"}</span>
                 </div>
             </div>
             <a href="{trip_url}" target="_blank" class="flight-book-btn">Book on Trip.com →</a>

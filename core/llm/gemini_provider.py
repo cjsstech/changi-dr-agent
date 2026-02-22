@@ -94,10 +94,13 @@ class GeminiProvider:
             # Log detailed response info
             if response.candidates:
                 candidate = response.candidates[0]
-                finish_reason = candidate.finish_reason
-                logger.info(f"[Gemini] Finish reason: {finish_reason}")
+                logger.info(f"[Gemini] Candidate finish reason: {candidate.finish_reason}")
                 if hasattr(candidate, 'safety_ratings'):
                     logger.info(f"[Gemini] Safety ratings: {candidate.safety_ratings}")
+                
+                # Log citation metadata if present (useful for recitation debugging)
+                if hasattr(candidate, 'citation_metadata') and candidate.citation_metadata:
+                    logger.info(f"[Gemini] Citation metadata: {candidate.citation_metadata}")
                 
                 # Check for function call
                 if candidate.content and candidate.content.parts:
@@ -106,15 +109,20 @@ class GeminiProvider:
                             fc = part.function_call
                             logger.info(f"[Gemini] Function call detected: {fc.name}")
                             
-                            # Convert protobuf Map to dict safely
-                            args_dict = {}
-                            if hasattr(fc, 'args'):
-                                try:
-                                    # Convert to standard dict
-                                    for key, value in fc.args.items():
-                                        args_dict[key] = value
-                                except:
-                                    pass
+                            # Convert protobuf Map to dict safely (recursively)
+                            def to_dict(obj):
+                                if hasattr(obj, 'items'):
+                                    return {k: to_dict(v) for k, v in obj.items()}
+                                elif isinstance(obj, (list, tuple)):
+                                    return [to_dict(i) for i in obj]
+                                elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
+                                    try:
+                                        return [to_dict(i) for i in obj]
+                                    except:
+                                        return str(obj)
+                                return obj
+
+                            args_dict = to_dict(fc.args) if hasattr(fc, 'args') else {}
                                     
                             return {
                                 "function_call": {

@@ -20,6 +20,9 @@ const AVAILABLE_MODELS = {
         { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash (Cheaper, Fast)' },
         { value: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro (Most Capable)' },
         { value: 'gemini-2.0-flash', label: 'Gemini 2.0 Flash' },
+        { value: 'gemini-1.5-flash', label: 'Gemini 1.5 Flash (Fast, Efficient)' },
+        { value: 'gemini-1.5-pro', label: 'Gemini 1.5 Pro (Most Capable)' },
+        { value: 'gemini-2.0-flash-exp', label: 'Gemini 2.0 Flash (Experimental)' },
         { value: 'gemini-pro', label: 'Gemini Pro (Legacy)' }
     ]
 };
@@ -531,6 +534,7 @@ function loadMCPTools() {
         .then(data => {
             if (data.success) {
                 displayMCPTools(data.tools);
+                renderMCPToolGroups(data.tools); // Update tool selection list
                 const enabledCount = groupMCPTools(data.tools).filter(t => t.enabled).length;
                 document.getElementById('toolsCount').textContent = enabledCount;
             } else {
