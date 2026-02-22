@@ -96,7 +96,7 @@ class AgentExecutor:
                     return result
             else:
                 # Fallback to direct call
-                from changi_flight_service import search_flights_by_destination
+                from core.services.changi_flight_service import search_flights_by_destination
                 flights = search_flights_by_destination(
                     destination, 
                     dates,
@@ -603,7 +603,7 @@ NOTE: Once you have Duration, Travel Dates, and Destination, IMMEDIATELY format 
             if selected_flights:
                 logger.info(f"[Agent Executor] Adding {len(selected_flights)} flight options for UI display")
                 try:
-                    from changi_flight_service import format_flight_options_for_itinerary
+                    from core.services.changi_flight_service import format_flight_options_for_itinerary
                     flight_options_html = format_flight_options_for_itinerary(
                         selected_flights,
                         metadata_destination,
