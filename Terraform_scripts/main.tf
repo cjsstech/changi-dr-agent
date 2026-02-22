@@ -39,7 +39,6 @@ resource "aws_cloudformation_stack" "agent_stack" {
     FileBucketName    = "agent-dr-artifacts"
     SessionTTL        = "3600"
     McpApiUrl         = var.mcp_api_url
-    McpApiKey         = var.mcp_api_key
   }
 
   capabilities = [

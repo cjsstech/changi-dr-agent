@@ -9,9 +9,8 @@ CLOUD_ENV = os.environ.get("CLOUD_ENV", "false").lower() == "true"
 
 # MCP MANAGER (Transport + Local Registry)
 class McpManager:
-    def __init__(self, mcp_api_url: str, api_key: str):
+    def __init__(self, mcp_api_url: str):
         self.mcp_api_url = mcp_api_url
-        self.api_key = api_key
 
         # Start with static tool registry
         self.tools = {}
@@ -40,8 +39,7 @@ class McpManager:
             self.mcp_api_url,
             data=json.dumps(payload).encode("utf-8"),
             headers={
-                "Content-Type": "application/json",
-                "x-api-key": self.api_key
+                "Content-Type": "application/json"
             },
             method="POST"
         )
@@ -124,12 +122,10 @@ class McpManager:
 # Initialize MCP manager: GLOBAL (Persist Across Warm Lambda Invocations)
 mcp_manager = (
     McpManager(
-        mcp_api_url=os.environ["MCP_API_URL"],
-        api_key=os.environ["MCP_API_KEY"]
+        mcp_api_url=os.environ["MCP_API_URL"]
     )
     if CLOUD_ENV
     else McpManager(
-        mcp_api_url="http://127.0.0.1:8002",
-        api_key=""
+        mcp_api_url="http://127.0.0.1:8002"
     )
 )

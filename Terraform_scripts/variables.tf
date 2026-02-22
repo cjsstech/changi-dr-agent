@@ -24,10 +24,3 @@ variable "mcp_api_url" {
   type        = string
   default     = ""
 }
-
-variable "mcp_api_key" {
-  description = "MCP API Gateway API Key"
-  type        = string
-  sensitive   = true
-  default     = ""
-}

@@ -37,7 +37,6 @@ if ($envVars.ContainsKey("MCP_API_URL")) {
 elseif ($envVars.ContainsKey("MCP_SERVER_URL")) {
     $tfVars += "-var=`"mcp_api_url=$($envVars['MCP_SERVER_URL'])`""
 }
-if ($envVars.ContainsKey("MCP_API_KEY")) { $tfVars += "-var=`"mcp_api_key=$($envVars['MCP_API_KEY'])`"" }
 
 # Step 1: Build the Lambda zip
 Write-Host ""
